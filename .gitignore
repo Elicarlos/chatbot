@@ -1,0 +1,23 @@
+# Ambiente Virtual e Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+
+# Variaveis de Ambiente Sensiveis
+.env
+
+# Docker e Logs
+*.log
+docker-compose.override.yml
+
+# Ignorar dados locais (nao commitar bancos e tokens do whatsapp)
+evolution-api/instances/
+postgres/data/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
