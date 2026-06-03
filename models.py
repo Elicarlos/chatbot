@@ -12,6 +12,7 @@ class Product(Base):
     description = Column(String, nullable=True)
     price = Column(Numeric(10, 2), nullable=False)
     stock = Column(Integer, default=0)
+    instagram_link = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class Customer(Base):
