@@ -21,3 +21,6 @@ postgres/data/
 .vscode/
 .idea/
 *.swp
+
+# Arquivos Locais Temporarios
+notes.txt
