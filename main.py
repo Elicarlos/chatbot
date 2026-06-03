@@ -3,10 +3,12 @@ import logging
 import requests
 from fastapi import FastAPI, Header, HTTPException
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 
-from models import Customer, InteractionLog
+from models import Customer, InteractionLog, Product
 from langgraph_bot.agent import process_message_with_ai
 
 load_dotenv()
@@ -18,6 +20,18 @@ app = FastAPI(title="Chatbot Webhook API")
 
 # Protege o webhook contra ataques externos
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
+
+# Pydantic schemas para o painel de administracao
+class ProductSchema(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    stock: int = 0
+    instagram_link: str | None = None
+
+class StatusSchema(BaseModel):
+    status: str
+
 
 # Configuração de conexão do banco de dados para salvar interações
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -150,6 +164,197 @@ async def receive_whatsapp_message(
             db.close()
         
     return {"status": "processed"}
+
+# ----------------- ROTAS DO PAINEL ADMIN -----------------
+
+@app.get("/admin", response_class=HTMLResponse)
+async def get_admin_dashboard():
+    try:
+        with open("admin.html", "r", encoding="utf-8") as f:
+            html_content = f.read()
+        return HTMLResponse(content=html_content)
+    except Exception as e:
+        return HTMLResponse(content=f"<h3>Erro ao carregar o painel administrativo: {str(e)}</h3>", status_code=500)
+
+@app.get("/api/admin/metrics")
+async def get_metrics():
+    db = SessionLocal()
+    try:
+        total_clientes = db.query(Customer).count()
+        total_interacoes = db.query(InteractionLog).count()
+        
+        # Nota média CSAT
+        avg_csat = db.query(func.avg(Customer.last_csat_rate)).filter(Customer.last_csat_rate != None).scalar()
+        avg_csat = float(avg_csat) if avg_csat else 0.0
+        
+        # Horários de pico
+        logs = db.query(InteractionLog.created_at).all()
+        horas_pico = [0] * 24
+        for log in logs:
+            if log.created_at:
+                horas_pico[log.created_at.hour] += 1
+                
+        # Status de Transbordo
+        transbordos = db.query(Customer).filter(Customer.status == "transbordo").count()
+        
+        return {
+            "total_clientes": total_clientes,
+            "total_interacoes": total_interacoes,
+            "media_csat": round(avg_csat, 2),
+            "total_transbordo": transbordos,
+            "horas_pico": horas_pico
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/api/admin/customers")
+async def get_customers():
+    db = SessionLocal()
+    try:
+        customers = db.query(Customer).order_by(Customer.created_at.desc()).all()
+        return [
+            {
+                "id": c.id,
+                "phone_number": c.phone_number,
+                "name": c.name or "Sem Nome",
+                "status": c.status,
+                "last_csat_rate": c.last_csat_rate,
+                "created_at": c.created_at.strftime("%d/%m/%Y %H:%M") if c.created_at else None
+            }
+            for c in customers
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.post("/api/admin/customers/{phone_number}/status")
+async def update_customer_status(phone_number: str, schema: StatusSchema):
+    db = SessionLocal()
+    try:
+        # Decodifica se houver caracteres especiais na URL (geralmente nao ha no JID)
+        customer = db.query(Customer).filter(Customer.phone_number == phone_number).first()
+        if not customer:
+            raise HTTPException(status_code=404, detail="Cliente não encontrado")
+        
+        if schema.status not in ["ativo", "transbordo"]:
+            raise HTTPException(status_code=400, detail="Status inválido")
+            
+        customer.status = schema.status
+        db.commit()
+        return {"status": "success", "new_status": customer.status}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/api/admin/customers/{phone_number}/logs")
+async def get_customer_logs(phone_number: str):
+    db = SessionLocal()
+    try:
+        logs = db.query(InteractionLog).filter(InteractionLog.phone_number == phone_number).order_by(InteractionLog.created_at.asc()).all()
+        return [
+            {
+                "id": l.id,
+                "message_in": l.message_in,
+                "message_out": l.message_out,
+                "created_at": l.created_at.strftime("%d/%m/%Y %H:%M:%S") if l.created_at else None
+            }
+            for l in logs
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/api/admin/products")
+async def get_products():
+    db = SessionLocal()
+    try:
+        products = db.query(Product).order_by(Product.name.asc()).all()
+        return [
+            {
+                "id": p.id,
+                "name": p.name,
+                "description": p.description,
+                "price": float(p.price),
+                "stock": p.stock,
+                "instagram_link": p.instagram_link
+            }
+            for p in products
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.post("/api/admin/products")
+async def create_product(product: ProductSchema):
+    db = SessionLocal()
+    try:
+        # Verifica se já existe
+        exists = db.query(Product).filter(Product.name.ilike(product.name.strip())).first()
+        if exists:
+            raise HTTPException(status_code=400, detail="Já existe um produto com este nome")
+            
+        new_prod = Product(
+            name=product.name.strip(),
+            description=product.description,
+            price=product.price,
+            stock=product.stock,
+            instagram_link=product.instagram_link
+        )
+        db.add(new_prod)
+        db.commit()
+        db.refresh(new_prod)
+        return {"status": "success", "product_id": new_prod.id}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.put("/api/admin/products/{product_id}")
+async def update_product(product_id: int, product: ProductSchema):
+    db = SessionLocal()
+    try:
+        prod = db.query(Product).filter(Product.id == product_id).first()
+        if not prod:
+            raise HTTPException(status_code=404, detail="Produto não encontrado")
+            
+        prod.name = product.name.strip()
+        prod.description = product.description
+        prod.price = product.price
+        prod.stock = product.stock
+        prod.instagram_link = product.instagram_link
+        
+        db.commit()
+        return {"status": "success"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.delete("/api/admin/products/{product_id}")
+async def delete_product(product_id: int):
+    db = SessionLocal()
+    try:
+        prod = db.query(Product).filter(Product.id == product_id).first()
+        if not prod:
+            raise HTTPException(status_code=404, detail="Produto não encontrado")
+            
+        db.delete(prod)
+        db.commit()
+        return {"status": "success"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
 
 @app.get("/health")
 def health_check():
