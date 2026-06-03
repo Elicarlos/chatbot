@@ -1,0 +1,7 @@
+FROM node:20-alpine
+
+RUN npm install -g fs-extra evolution-manager
+
+EXPOSE 3000
+
+CMD ["npx", "evolution-manager"]

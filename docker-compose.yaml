@@ -57,10 +57,11 @@ services:
       - bot_network
 
   evolution-manager:
-    image: gabrielpastori1/evolution-manager:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.manager
     container_name: evolution_manager
     restart: always
-
     depends_on:
       - evolution-api
     networks:
