@@ -87,6 +87,10 @@
         <header class="h-16 bg-white border-b border-slate-100 px-8 flex items-center justify-between shrink-0">
             <h2 id="page-title" class="font-bold text-slate-800 text-lg">Dashboard</h2>
             <div class="flex items-center gap-4">
+                <button onclick="openProductModal()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition-all shadow-md shadow-indigo-100 flex items-center gap-1.5">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Cadastrar Produto</span>
+                </button>
                 <button onclick="refreshData()" class="p-2 text-slate-400 hover:text-slate-600 transition-colors">
                     <i class="fa-solid fa-rotate text-lg"></i>
                 </button>
@@ -293,6 +297,8 @@
         let currentTab = 'metrics';
         let activityChart = null;
         let selectedCustomer = null;
+        const customersMap = {};
+        const productsMap = {};
 
         // Ao Inicializar
         document.addEventListener("DOMContentLoaded", () => {
@@ -422,6 +428,7 @@
 
                 container.innerHTML = "";
                 customers.forEach(c => {
+                    customersMap[c.phone_number] = c;
                     const cleanPhone = c.phone_number.split("@")[0];
                     const isSelected = selectedCustomer && selectedCustomer.phone_number === c.phone_number;
                     const statusClass = c.status === 'transbordo' ? 'bg-amber-100 text-amber-700' : 'bg-indigo-50 text-indigo-600';
@@ -429,9 +436,9 @@
                     const csatLabel = c.last_csat_rate ? `<span class="text-xs text-amber-600 font-semibold"><i class="fa-solid fa-star text-[10px] mr-1"></i>${c.last_csat_rate}</span>` : '';
 
                     container.innerHTML += `
-                        <button onclick='selectCustomer(${JSON.stringify(c)})' class="w-full text-left p-3 rounded-xl border border-transparent transition-all flex justify-between items-center ${activeClass}">
+                        <button onclick="selectCustomerByPhone('${c.phone_number}')" class="w-full text-left p-3 rounded-xl border border-transparent transition-all flex justify-between items-center ${activeClass}">
                             <div>
-                                <h5 class="font-bold text-slate-800 text-sm leading-tight">${c.name}</h5>
+                                <h5 class="font-bold text-slate-800 text-sm leading-tight">${escapeHtml(c.name)}</h5>
                                 <span class="text-xs text-slate-400">${cleanPhone}</span>
                             </div>
                             <div class="flex flex-col items-end gap-1.5">
@@ -443,6 +450,14 @@
                 });
             } catch (err) {
                 container.innerHTML = `<div class="text-center py-8 text-red-500 text-xs">Erro ao carregar lista.</div>`;
+            }
+        }
+
+        // Seleciona cliente por telefone usando o mapa global
+        function selectCustomerByPhone(phone) {
+            const customer = customersMap[phone];
+            if (customer) {
+                selectCustomer(customer);
             }
         }
 
@@ -570,18 +585,19 @@
 
                 body.innerHTML = "";
                 products.forEach(p => {
+                    productsMap[p.id] = p;
                     const desc = p.description || "-";
                     const insta = p.instagram_link ? `<a href="${p.instagram_link}" target="_blank" class="text-indigo-600 hover:text-indigo-800 transition-colors text-xs font-semibold flex items-center gap-1"><i class="fa-brands fa-instagram"></i> Ver Post</a>` : `<span class="text-slate-300">-</span>`;
                     
                     body.innerHTML += `
                         <tr class="hover:bg-slate-50/50 transition-colors">
-                            <td class="px-6 py-4 font-bold text-slate-800">${p.name}</td>
-                            <td class="px-6 py-4 max-w-xs truncate" title="${desc}">${desc}</td>
+                            <td class="px-6 py-4 font-bold text-slate-800">${escapeHtml(p.name)}</td>
+                            <td class="px-6 py-4 max-w-xs truncate" title="${escapeHtml(desc)}">${escapeHtml(desc)}</td>
                             <td class="px-6 py-4 font-semibold text-slate-700">R$ ${p.price.toFixed(2)}</td>
                             <td class="px-6 py-4"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${p.stock > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}">${p.stock} un</span></td>
                             <td class="px-6 py-4">${insta}</td>
                             <td class="px-6 py-4 text-right space-x-2">
-                                <button onclick='openProductModal(${JSON.stringify(p)})' class="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors" title="Editar"><i class="fa-solid fa-pen-to-square"></i></button>
+                                <button onclick="editProduct(${p.id})" class="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors" title="Editar"><i class="fa-solid fa-pen-to-square"></i></button>
                                 <button onclick="deleteProduct(${p.id})" class="p-1.5 text-slate-400 hover:text-rose-600 transition-colors" title="Deletar"><i class="fa-solid fa-trash-can"></i></button>
                             </td>
                         </tr>
@@ -589,6 +605,14 @@
                 });
             } catch (err) {
                 body.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-red-500 text-xs">Erro ao carregar catálogo.</td></tr>`;
+            }
+        }
+
+        // Abre o modal de produto no modo de edição com base no mapa
+        function editProduct(productId) {
+            const product = productsMap[productId];
+            if (product) {
+                openProductModal(product);
             }
         }
 
