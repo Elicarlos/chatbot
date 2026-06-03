@@ -1,7 +1,9 @@
 import os
 import logging
 import requests
-from fastapi import FastAPI, Header, HTTPException
+import secrets
+from fastapi import FastAPI, Header, HTTPException, Depends, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
@@ -165,10 +167,35 @@ async def receive_whatsapp_message(
         
     return {"status": "processed"}
 
+# ----------------- SEGURANÇA E AUTENTICAÇÃO DO PAINEL -----------------
+
+security = HTTPBasic()
+ADMIN_USER = os.getenv("ADMIN_USER", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "fluence_store_kids_2026")
+
+def authenticate_admin(credentials: HTTPBasicCredentials = Depends(security)):
+    current_username_bytes = credentials.username.encode("utf8")
+    correct_username_bytes = ADMIN_USER.encode("utf8")
+    is_correct_username = secrets.compare_digest(
+        current_username_bytes, correct_username_bytes
+    )
+    current_password_bytes = credentials.password.encode("utf8")
+    correct_password_bytes = ADMIN_PASSWORD.encode("utf8")
+    is_correct_password = secrets.compare_digest(
+        current_password_bytes, correct_password_bytes
+    )
+    if not (is_correct_username and is_correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciais inválidas",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
 # ----------------- ROTAS DO PAINEL ADMIN -----------------
 
 @app.get("/admin", response_class=HTMLResponse)
-async def get_admin_dashboard():
+async def get_admin_dashboard(username: str = Depends(authenticate_admin)):
     try:
         with open("admin.html", "r", encoding="utf-8") as f:
             html_content = f.read()
@@ -177,7 +204,7 @@ async def get_admin_dashboard():
         return HTMLResponse(content=f"<h3>Erro ao carregar o painel administrativo: {str(e)}</h3>", status_code=500)
 
 @app.get("/api/admin/metrics")
-async def get_metrics():
+async def get_metrics(username: str = Depends(authenticate_admin)):
     db = SessionLocal()
     try:
         total_clientes = db.query(Customer).count()
@@ -210,7 +237,7 @@ async def get_metrics():
         db.close()
 
 @app.get("/api/admin/customers")
-async def get_customers():
+async def get_customers(username: str = Depends(authenticate_admin)):
     db = SessionLocal()
     try:
         customers = db.query(Customer).order_by(Customer.created_at.desc()).all()
@@ -231,7 +258,7 @@ async def get_customers():
         db.close()
 
 @app.post("/api/admin/customers/{phone_number}/status")
-async def update_customer_status(phone_number: str, schema: StatusSchema):
+async def update_customer_status(phone_number: str, schema: StatusSchema, username: str = Depends(authenticate_admin)):
     db = SessionLocal()
     try:
         # Decodifica se houver caracteres especiais na URL (geralmente nao ha no JID)
@@ -252,7 +279,7 @@ async def update_customer_status(phone_number: str, schema: StatusSchema):
         db.close()
 
 @app.get("/api/admin/customers/{phone_number}/logs")
-async def get_customer_logs(phone_number: str):
+async def get_customer_logs(phone_number: str, username: str = Depends(authenticate_admin)):
     db = SessionLocal()
     try:
         logs = db.query(InteractionLog).filter(InteractionLog.phone_number == phone_number).order_by(InteractionLog.created_at.asc()).all()
@@ -271,7 +298,7 @@ async def get_customer_logs(phone_number: str):
         db.close()
 
 @app.get("/api/admin/products")
-async def get_products():
+async def get_products(username: str = Depends(authenticate_admin)):
     db = SessionLocal()
     try:
         products = db.query(Product).order_by(Product.name.asc()).all()
@@ -292,7 +319,7 @@ async def get_products():
         db.close()
 
 @app.post("/api/admin/products")
-async def create_product(product: ProductSchema):
+async def create_product(product: ProductSchema, username: str = Depends(authenticate_admin)):
     db = SessionLocal()
     try:
         # Verifica se já existe
@@ -318,7 +345,7 @@ async def create_product(product: ProductSchema):
         db.close()
 
 @app.put("/api/admin/products/{product_id}")
-async def update_product(product_id: int, product: ProductSchema):
+async def update_product(product_id: int, product: ProductSchema, username: str = Depends(authenticate_admin)):
     db = SessionLocal()
     try:
         prod = db.query(Product).filter(Product.id == product_id).first()
@@ -340,7 +367,7 @@ async def update_product(product_id: int, product: ProductSchema):
         db.close()
 
 @app.delete("/api/admin/products/{product_id}")
-async def delete_product(product_id: int):
+async def delete_product(product_id: int, username: str = Depends(authenticate_admin)):
     db = SessionLocal()
     try:
         prod = db.query(Product).filter(Product.id == product_id).first()
