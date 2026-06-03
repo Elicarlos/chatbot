@@ -4,4 +4,4 @@ RUN npm install -g fs-extra evolution-manager
 
 EXPOSE 3000
 
-CMD ["npx", "evolution-manager"]
+CMD ["npx", "evolution-manager", "server", "start", "--port=3000"]
