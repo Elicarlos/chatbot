@@ -45,7 +45,7 @@ services:
 
   bot-python:
     build: 
-      context: ./bot-python
+      context: .
     container_name: chatbot_python
     restart: always
     ports:
