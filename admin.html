@@ -36,8 +36,11 @@
 </head>
 <body class="flex h-screen overflow-hidden">
 
+    <!-- OVERLAY SIDEBAR MOBILE -->
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="hidden fixed inset-0 bg-slate-900/40 z-20 md:hidden transition-opacity"></div>
+
     <!-- BARRA LATERAL -->
-    <aside class="w-64 bg-white border-r border-slate-100 flex flex-col justify-between z-10">
+    <aside id="sidebar" class="fixed inset-y-0 left-0 w-64 bg-white border-r border-slate-100 flex flex-col justify-between z-30 transform -translate-x-full md:translate-x-0 md:static transition-transform duration-300 ease-in-out">
         <div>
             <!-- LOGO -->
             <div class="p-6 flex items-center gap-3">
@@ -84,18 +87,23 @@
     <!-- ÁREA DE CONTEÚDO PRINCIPAL -->
     <main class="flex-1 flex flex-col min-w-0 bg-slate-50 overflow-y-auto">
         <!-- CABEÇALHO SUPERIOR -->
-        <header class="h-16 bg-white border-b border-slate-100 px-8 flex items-center justify-between shrink-0">
-            <h2 id="page-title" class="font-bold text-slate-800 text-lg">Dashboard</h2>
-            <div class="flex items-center gap-4">
-                <button onclick="openProductModal()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition-all shadow-md shadow-indigo-100 flex items-center gap-1.5">
+        <header class="h-16 bg-white border-b border-slate-100 px-4 md:px-8 flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-3">
+                <button onclick="toggleSidebar()" class="p-2 -ml-2 text-slate-500 hover:text-slate-600 md:hidden transition-colors">
+                    <i class="fa-solid fa-bars text-xl"></i>
+                </button>
+                <h2 id="page-title" class="font-bold text-slate-800 text-sm md:text-lg">Dashboard</h2>
+            </div>
+            <div class="flex items-center gap-2 md:gap-4">
+                <button onclick="openProductModal()" class="px-2.5 py-1.5 md:px-3.5 md:py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] md:text-xs font-semibold transition-all shadow-md shadow-indigo-100 flex items-center gap-1">
                     <i class="fa-solid fa-plus"></i>
-                    <span>Cadastrar Produto</span>
+                    <span class="hidden sm:inline">Cadastrar Produto</span>
                 </button>
                 <button onclick="refreshData()" class="p-2 text-slate-400 hover:text-slate-600 transition-colors">
                     <i class="fa-solid fa-rotate text-lg"></i>
                 </button>
                 <span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span class="text-xs font-semibold text-slate-500">Servidor Ativo</span>
+                <span class="text-xs font-semibold text-slate-500 hidden sm:inline">Servidor Ativo</span>
             </div>
         </header>
 
@@ -168,9 +176,9 @@
 
 
             <!-- SEÇÃO 2: ATENDIMENTO / CHATS -->
-            <section id="section-chats" class="hidden h-[calc(100vh-10rem)] flex gap-6">
+            <section id="section-chats" class="hidden h-[calc(100vh-10rem)] flex flex-col md:flex-row gap-4 md:gap-6 relative">
                 <!-- LISTA DE CLIENTES -->
-                <div class="w-80 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col">
+                <div id="chats-sidebar" class="w-full md:w-80 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col h-full shrink-0">
                     <div class="p-4 border-b border-slate-50 font-bold text-slate-800 text-sm shrink-0">
                         Histórico de Conversas
                     </div>
@@ -180,26 +188,31 @@
                 </div>
 
                 <!-- CONVERSA DO CHAT SELECIONADO -->
-                <div class="flex-1 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col h-full overflow-hidden">
+                <div id="chats-window" class="hidden md:flex flex-1 bg-white rounded-2xl border border-slate-100 shadow-sm flex-col h-full overflow-hidden">
                     <!-- CABEÇALHO DO CHAT -->
                     <div id="chat-header" class="p-4 border-b border-slate-50 flex items-center justify-between shrink-0 bg-slate-50/50">
-                        <div>
-                            <h4 id="chat-header-name" class="font-bold text-slate-800 text-sm">Selecione um contato</h4>
-                            <span id="chat-header-phone" class="text-xs text-slate-400"></span>
+                        <div class="flex items-center">
+                            <button onclick="backToChatsList()" class="p-2 -ml-2 text-slate-500 hover:text-slate-600 md:hidden mr-2 transition-colors">
+                                <i class="fa-solid fa-arrow-left text-xl"></i>
+                            </button>
+                            <div>
+                                <h4 id="chat-header-name" class="font-bold text-slate-800 text-sm">Selecione um contato</h4>
+                                <span id="chat-header-phone" class="text-xs text-slate-400"></span>
+                            </div>
                         </div>
                         <!-- AÇÕES DO CHAT -->
-                        <div id="chat-actions" class="hidden flex items-center gap-3">
+                        <div id="chat-actions" class="hidden flex items-center gap-2 md:gap-3">
                             <!-- Badge Status -->
-                            <span id="chat-status-badge" class="px-2.5 py-1 rounded-full text-xs font-semibold"></span>
+                            <span id="chat-status-badge" class="px-2 py-0.5 rounded-full text-[10px] md:text-xs font-semibold"></span>
                             <!-- Botão Alternar Status -->
-                            <button id="btn-toggle-status" onclick="toggleCustomerStatus()" class="px-4 py-1.5 rounded-lg text-xs font-semibold text-white transition-all shadow-sm">
+                            <button id="btn-toggle-status" onclick="toggleCustomerStatus()" class="px-2.5 py-1.5 rounded-lg text-[10px] md:text-xs font-semibold text-white transition-all shadow-sm">
                                 Alternar Status
                             </button>
                         </div>
                     </div>
 
                     <!-- MENSAGENS -->
-                    <div id="chat-messages-container" class="flex-1 overflow-y-auto p-6 bg-slate-50/20 space-y-4">
+                    <div id="chat-messages-container" class="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50/20 space-y-4">
                         <div class="h-full flex flex-col items-center justify-center text-slate-400 text-sm">
                             <i class="fa-solid fa-comments text-4xl mb-3 text-slate-200"></i>
                             Clique em um contato na barra lateral para ver o histórico.
@@ -220,8 +233,8 @@
                     </button>
                 </div>
 
-                <!-- TABELA DE PRODUTOS -->
-                <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                <!-- TABELA DE PRODUTOS (DESKTOP) -->
+                <div class="hidden md:block bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
                             <thead>
@@ -241,6 +254,11 @@
                             </tbody>
                         </table>
                     </div>
+                </div>
+
+                <!-- CARDS DE PRODUTOS (MOBILE) -->
+                <div id="products-cards-container" class="grid grid-cols-1 gap-4 md:hidden">
+                    <!-- Produtos inseridos via JS -->
                 </div>
             </section>
 
@@ -346,6 +364,14 @@
             refreshData();
         });
 
+        // Alterna a barra lateral no mobile
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            sidebar.classList.toggle('-translate-x-full');
+            overlay.classList.toggle('hidden');
+        }
+
         // Alterna entre abas
         function switchTab(tab) {
             currentTab = tab;
@@ -367,9 +393,22 @@
             const titles = { 'metrics': 'Dashboard', 'chats': 'Atendimento & Chats', 'products': 'Produtos' };
             document.getElementById('page-title').innerText = titles[tab];
 
+            // Fecha a barra lateral no mobile se estiver aberta
+            if (window.innerWidth < 768) {
+                const sidebar = document.getElementById('sidebar');
+                const overlay = document.getElementById('sidebar-overlay');
+                sidebar.classList.add('-translate-x-full');
+                overlay.classList.add('hidden');
+            }
+
             // Carrega dados da aba
             if (tab === 'chats') {
-                loadCustomers();
+                // Ao voltar para chats, reexibe a lista no mobile por padrão
+                if (window.innerWidth < 768) {
+                    backToChatsList();
+                } else {
+                    loadCustomers();
+                }
             } else if (tab === 'products') {
                 loadProducts();
             }
@@ -517,20 +556,38 @@
             
             if (customer.status === 'transbordo') {
                 badge.innerText = "SUPORTE HUMANO ATIVO";
-                badge.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700";
+                badge.className = "px-2 py-0.5 rounded-full text-[10px] md:text-xs font-semibold bg-amber-100 text-amber-700";
                 btn.innerText = "Finalizar Humano (Voltar Bot)";
-                btn.className = "px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm";
+                btn.className = "px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm";
             } else {
                 badge.innerText = "CHATBOT ATIVO";
-                badge.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-600";
+                badge.className = "px-2 py-0.5 rounded-full text-[10px] md:text-xs font-semibold bg-indigo-50 text-indigo-600";
                 btn.innerText = "Pausar Bot (Entrar Humano)";
-                btn.className = "px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 shadow-sm";
+                btn.className = "px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 shadow-sm";
+            }
+
+            // No mobile, esconde a lista de contatos e exibe a janela de chat
+            if (window.innerWidth < 768) {
+                document.getElementById('chats-sidebar').classList.add('hidden');
+                document.getElementById('chats-window').classList.remove('hidden');
+                document.getElementById('chats-window').classList.add('flex');
             }
 
             // Recarrega o histórico de conversas do cliente
             loadChatMessages(customer.phone_number);
             
-            // Re-renderiza lista de contatos para atualizar foco visual
+            // Re-renderiza lista de contatos para atualizar foco visual (evita recarregar no mobile para não travar a transição)
+            if (window.innerWidth >= 768) {
+                loadCustomers();
+            }
+        }
+
+        // Volta para a lista de conversas no mobile
+        function backToChatsList() {
+            document.getElementById('chats-sidebar').classList.remove('hidden');
+            document.getElementById('chats-window').classList.add('hidden');
+            document.getElementById('chats-window').classList.remove('flex');
+            selectedCustomer = null;
             loadCustomers();
         }
 
@@ -612,7 +669,9 @@
         // Carrega produtos cadastrados
         async function loadProducts() {
             const body = document.getElementById('products-table-body');
+            const cardsContainer = document.getElementById('products-cards-container');
             body.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-slate-400 text-xs">Carregando catálogo de produtos...</td></tr>`;
+            cardsContainer.innerHTML = `<div class="text-center py-8 text-slate-400 text-xs col-span-full">Carregando catálogo de produtos...</div>`;
             
             try {
                 const response = await fetch('/api/admin/products');
@@ -621,10 +680,12 @@
 
                 if (products.length === 0) {
                     body.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-slate-400 text-xs">Nenhum produto no catálogo.</td></tr>`;
+                    cardsContainer.innerHTML = `<div class="text-center py-8 text-slate-400 text-xs col-span-full">Nenhum produto no catálogo.</div>`;
                     return;
                 }
 
                 body.innerHTML = "";
+                cardsContainer.innerHTML = "";
                 products.forEach(p => {
                     productsMap[p.id] = p;
                     const desc = p.description || "-";
@@ -634,6 +695,7 @@
                     const catGen = [p.category, p.gender].filter(Boolean).join(" / ") || "-";
                     const sizes = p.sizes || "-";
 
+                    // Tabela Desktop
                     body.innerHTML += `
                         <tr class="hover:bg-slate-50/50 transition-colors">
                             <td class="px-6 py-4">${img}</td>
@@ -649,9 +711,41 @@
                             </td>
                         </tr>
                     `;
+
+                    // Cards Mobile
+                    cardsContainer.innerHTML += `
+                        <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3">
+                            <div class="flex items-center gap-3">
+                                ${img}
+                                <div class="flex-1 min-w-0">
+                                    <h4 class="font-bold text-slate-800 text-sm truncate">${escapeHtml(p.name)}</h4>
+                                    <span class="text-xs text-slate-400">${escapeHtml(catGen)}</span>
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-500 line-clamp-2">${escapeHtml(desc)}</p>
+                            <div class="flex justify-between items-center pt-2 border-t border-slate-50">
+                                <div>
+                                    <span class="text-[10px] text-slate-400 block">Preço</span>
+                                    <span class="font-bold text-indigo-600 text-sm">R$ ${p.price.toFixed(2)}</span>
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-slate-400 block">Estoque / Tamanho</span>
+                                    <span class="text-xs font-semibold text-slate-700">${p.stock} un | ${escapeHtml(sizes)}</span>
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center pt-2 gap-2">
+                                ${p.instagram_link ? `<a href="${p.instagram_link}" target="_blank" class="flex-1 text-center py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-semibold rounded-lg transition-colors"><i class="fa-brands fa-instagram mr-1"></i> Ver Post</a>` : ''}
+                                <div class="flex gap-2 shrink-0">
+                                    <button onclick="editProduct(${p.id})" class="p-2 text-slate-400 hover:text-indigo-600 bg-slate-50 rounded-lg transition-colors"><i class="fa-solid fa-pen-to-square"></i></button>
+                                    <button onclick="deleteProduct(${p.id})" class="p-2 text-slate-400 hover:text-rose-600 bg-slate-50 rounded-lg transition-colors"><i class="fa-solid fa-trash-can"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
                 });
             } catch (err) {
                 body.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-red-500 text-xs">Erro ao carregar catálogo.</td></tr>`;
+                cardsContainer.innerHTML = `<div class="text-center py-8 text-red-500 text-xs col-span-full">Erro ao carregar catálogo.</div>`;
             }
         }
 
