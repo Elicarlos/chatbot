@@ -9,6 +9,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - ./postgres/data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - bot_network
 
@@ -16,6 +21,13 @@ services:
     image: redis:alpine
     container_name: chatbot_redis
     restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - ./redis/data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 256m
     networks:
       - bot_network
 
@@ -35,8 +47,10 @@ services:
       - CACHE_REDIS_URI=redis://redis:6379
       - CACHE_REDIS_PREFIX_KEY=evo
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
     volumes:
       - ./evolution-api/instances:/evolution/instances
     networks:
@@ -63,7 +77,8 @@ services:
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
       - bot_network
 
