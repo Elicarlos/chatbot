@@ -38,6 +38,8 @@ prompt = ChatPromptTemplate.from_messages([
 agent = create_openai_tools_agent(llm, tools, prompt)
 agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
+from datetime import datetime
+
 # Dicionario simples em memoria para armazenar o historico por cliente (user_id / remoteJid)
 chat_histories = {}
 
@@ -45,8 +47,22 @@ def process_message_with_ai(user_id: str, message: str) -> str:
     """
     Processa a mensagem recebida pelo chatbot utilizando o agente LangChain,
     gerencia o historico de conversas e consulta o banco de dados se necessario.
+    Tambem injeta informacoes de data/hora atuais para que o agente saiba o periodo do dia.
     """
     try:
+        # Determina o periodo do dia atual
+        now = datetime.now()
+        hour = now.hour
+        if 6 <= hour < 12:
+            periodo = "manhã"
+        elif 12 <= hour < 18:
+            periodo = "tarde"
+        else:
+            periodo = "noite"
+        
+        # Metadata invisivel para o usuario final, mas lida pela IA
+        time_metadata = f"\n\n(Informação de contexto para o agente - Data/Hora Atual: {now.strftime('%d/%m/%Y %H:%M')}, Período do dia: {periodo})"
+        
         # Inicializa o historico do usuario se nao existir
         if user_id not in chat_histories:
             chat_histories[user_id] = []
@@ -59,15 +75,15 @@ def process_message_with_ai(user_id: str, message: str) -> str:
             else:
                 history.append(("ai", text))
         
-        # Executa o agente
+        # Executa o agente passando a mensagem atual acrescida da informacao de tempo
         response = agent_executor.invoke({
-            "input": message,
+            "input": f"{message}{time_metadata}",
             "chat_history": history
         })
         
         output = response.get("output", "Desculpe, tive um pequeno problema ao processar sua mensagem. Poderia repetir, por favor?")
         
-        # Salva a interacao no historico
+        # Salva a interacao limpa no historico (sem o metadata de tempo)
         chat_histories[user_id].append(("human", message))
         chat_histories[user_id].append(("ai", output))
         
