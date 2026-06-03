@@ -1,9 +1,13 @@
 import os
+import logging
 from fastapi import FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Chatbot Webhook API")
 
@@ -36,7 +40,7 @@ async def receive_whatsapp_message(
             sender = msg.get("key", {}).get("remoteJid")
             text = msg.get("message", {}).get("conversation")
             
-            print(f"Nova mensagem segura recebida de {sender}: {text}")
+            logger.info(f"Nova mensagem segura recebida de {sender}: {text}")
             
     return {"status": "received"}
 
