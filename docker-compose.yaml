@@ -45,6 +45,7 @@ services:
   evolution-manager:
     image: gabrielpastori1/evolution-manager:latest
     container_name: evolution_manager
+    command: /bin/sh -c "npm install -g fs-extra && npx evolution-manager"
     restart: always
 
     depends_on:
