@@ -43,7 +43,7 @@ services:
       - bot_network
 
   evolution-manager:
-    image: atendai/evolution-manager:latest
+    image: evolutionapi/evolution-manager:latest
     container_name: evolution_manager
     restart: always
 
