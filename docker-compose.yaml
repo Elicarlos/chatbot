@@ -43,7 +43,7 @@ services:
       - bot_network
 
   evolution-manager:
-    image: evoapicloud/evolution-manager:latest
+    image: gabrielpastori1/evolution-manager:latest
     container_name: evolution_manager
     restart: always
 
