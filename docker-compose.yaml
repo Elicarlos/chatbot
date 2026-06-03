@@ -77,6 +77,8 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - EVOLUTION_API_URL=http://evolution-api:8080
+      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy
