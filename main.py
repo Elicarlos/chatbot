@@ -106,20 +106,32 @@ async def receive_whatsapp_message(
             
         logger.info(f"Mensagem recebida de {sender} na instância {instance}: {text}")
         
-        # 1. Processa a mensagem usando o agente inteligente e cordial
-        response_text = process_message_with_ai(sender, text)
-        
-        # 2. Salva o cliente e o log da interação no banco de dados local
         db = SessionLocal()
         try:
-            # Verifica se o cliente já está cadastrado
+            # 1. Verifica ou cadastra o cliente
             customer = db.query(Customer).filter(Customer.phone_number == sender).first()
             if not customer:
                 push_name = data.get("pushName")
-                customer = Customer(phone_number=sender, name=push_name)
+                customer = Customer(phone_number=sender, name=push_name, status="ativo")
                 db.add(customer)
+                db.commit()
+                db.refresh(customer)
+                
+            # 2. Verifica se o atendimento está em modo suporte humano (transbordo)
+            if customer.status == "transbordo":
+                # Permite que o cliente volte ao atendimento do bot usando a palavra-chave #voltar
+                if text.strip().lower() == "#voltar":
+                    customer.status = "ativo"
+                    db.commit()
+                    logger.info(f"Cliente {sender} reativou o atendimento do chatbot.")
+                else:
+                    logger.info(f"Mensagem de {sender} ignorada: chatbot pausado (suporte humano ativo).")
+                    return {"status": "transbordo_active_ignored"}
             
-            # Registra o histórico da mensagem
+            # 3. Processa a mensagem usando o agente inteligente e cordial
+            response_text = process_message_with_ai(sender, text)
+            
+            # 4. Registra o histórico da mensagem
             interaction = InteractionLog(
                 phone_number=sender,
                 message_in=text,
@@ -127,14 +139,15 @@ async def receive_whatsapp_message(
             )
             db.add(interaction)
             db.commit()
-        except Exception as db_err:
-            logger.error(f"Erro ao gerenciar dados no banco local: {str(db_err)}")
+            
+            # 5. Envia a resposta de volta ao WhatsApp
+            send_whatsapp_message(instance, sender, response_text)
+            
+        except Exception as err:
+            logger.error(f"Erro no processamento do fluxo de atendimento: {str(err)}")
             db.rollback()
         finally:
             db.close()
-            
-        # 3. Envia a resposta de volta ao WhatsApp
-        send_whatsapp_message(instance, sender, response_text)
         
     return {"status": "processed"}
 

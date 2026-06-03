@@ -3,7 +3,14 @@ import logging
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.agents import create_openai_tools_agent, AgentExecutor
-from langgraph_bot.tools import list_products, get_product_details
+from langgraph_bot.tools import (
+    list_products, 
+    get_product_details, 
+    get_store_info, 
+    check_order_status, 
+    transferir_atendimento_humano, 
+    registrar_avaliacao_csat
+)
 
 logger = logging.getLogger(__name__)
 
@@ -16,14 +23,24 @@ Informações importantes da loja para responder aos clientes:
 - Política de Trocas: O prazo para trocas é de até 30 dias.
 - Entregas e Frete: Realizamos entregas em toda a cidade de Teresina pelo valor fixo de R$ 15,00.
 
-Sempre que o cliente perguntar sobre os produtos disponíveis, o que a loja vende, ou o preço de algo, utilize as ferramentas disponíveis para obter as informações diretamente do banco de dados. Nunca invente preços ou produtos que não constam no banco de dados!
-
-Se você não souber a resposta ou se a pergunta for sobre um assunto complexo, oriente o cliente a aguardar de forma super gentil, informando que um atendente humano dará continuidade ao atendimento em breve.
+Diretrizes de Funcionamento e Ferramentas:
+1. Catálogo e Preços: Use 'list_products' para listar itens disponíveis ou 'get_product_details' para detalhes de um produto específico. Nunca invente valores!
+2. Informações Gerais (Pix, Endereço, Horário, Pagamento): Use 'get_store_info' informando a respectiva chave de busca ('horario_funcionamento', 'dados_pix', 'endereco' ou 'formas_pagamento').
+3. Status do Pedido: Se o cliente quiser saber o andamento de um pedido, solicite o código dele (ex: FS1002) e utilize 'check_order_status'. Utilize o JID do cliente fornecido na nota de contexto ao fim do input como parâmetro 'phone_number'.
+4. Suporte Humano: Se o cliente pedir para falar com um atendente humano, use 'transferir_atendimento_humano' com o JID do cliente e informe cordialmente que o robô foi pausado para que o humano assuma.
+5. Avaliação do Atendimento (CSAT): No final do atendimento, solicite gentilmente que o cliente dê uma nota de 1 a 5 para o atendimento. Se ele der a nota, utilize a ferramenta 'registrar_avaliacao_csat' para salvar o feedback.
 
 Responda sempre em português do Brasil, de forma clara, organizada e muito simpática."""
 
 # Inicializa o LLM e as ferramentas
-tools = [list_products, get_product_details]
+tools = [
+    list_products, 
+    get_product_details, 
+    get_store_info, 
+    check_order_status, 
+    transferir_atendimento_humano, 
+    registrar_avaliacao_csat
+]
 
 # O OpenAI API Key sera lido automaticamente do ambiente (os.environ["OPENAI_API_KEY"])
 llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.3)
@@ -60,8 +77,8 @@ def process_message_with_ai(user_id: str, message: str) -> str:
         else:
             periodo = "noite"
         
-        # Metadata invisivel para o usuario final, mas lida pela IA
-        time_metadata = f"\n\n(Informação de contexto para o agente - Data/Hora Atual: {now.strftime('%d/%m/%Y %H:%M')}, Período do dia: {periodo})"
+        # Metadata invisivel para o usuario final, mas lida pela IA (contém o JID do cliente para as ferramentas)
+        time_metadata = f"\n\n(Informação de contexto para o agente - Cliente JID: {user_id}, Data/Hora Atual: {now.strftime('%d/%m/%Y %H:%M')}, Período do dia: {periodo})"
         
         # Inicializa o historico do usuario se nao existir
         if user_id not in chat_histories:

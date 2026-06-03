@@ -15,12 +15,30 @@ class Product(Base):
     instagram_link = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class StoreConfig(Base):
+    __tablename__ = 'store_configs'
+
+    key = Column(String, primary_key=True, index=True)
+    value = Column(String, nullable=False)
+
+class Order(Base):
+    __tablename__ = 'orders'
+
+    id = Column(Integer, primary_key=True, index=True)
+    phone_number = Column(String, index=True, nullable=False)
+    order_number = Column(String, unique=True, index=True, nullable=False)
+    status = Column(String, nullable=False)
+    details = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class Customer(Base):
     __tablename__ = 'customers'
 
     id = Column(Integer, primary_key=True, index=True)
     phone_number = Column(String, unique=True, index=True, nullable=False)
     name = Column(String, nullable=True)
+    status = Column(String, default="ativo", nullable=False)  # "ativo" ou "transbordo"
+    last_csat_rate = Column(Integer, nullable=True)  # Nota de 1 a 5
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class InteractionLog(Base):
