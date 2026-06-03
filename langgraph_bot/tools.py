@@ -12,7 +12,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def list_products() -> str:
     """
     Retorna a lista de todos os produtos cadastrados na loja Fluence Store Kids, 
-    com o respectivo nome, preço, descrição e link do Instagram.
+    com o respectivo nome, preço, descrição, tamanho, categoria, gênero e link do Instagram.
     """
     db = SessionLocal()
     try:
@@ -22,8 +22,11 @@ def list_products() -> str:
         
         ret = "Aqui está a lista de produtos disponíveis na Fluence Store Kids:\n"
         for p in products:
-            link = f" | Instagram: {p.instagram_link}" if p.instagram_link else ""
-            ret += f"- {p.name}: R$ {p.price:.2f} ({p.description}{link})\n"
+            link = f" | Link: {p.instagram_link}" if p.instagram_link else ""
+            sizes = f" | Tamanhos: {p.sizes}" if p.sizes else ""
+            gender = f" | Gênero: {p.gender}" if p.gender else ""
+            category = f" | Categoria: {p.category}" if p.category else ""
+            ret += f"- {p.name}: R$ {p.price:.2f} ({p.description}{category}{gender}{sizes}{link})\n"
         return ret
     except Exception as e:
         return f"Erro ao acessar o banco de dados para listar produtos: {str(e)}"
@@ -33,7 +36,7 @@ def list_products() -> str:
 @tool
 def get_product_details(name: str) -> str:
     """
-    Busca o preço, descrição, estoque e link do Instagram de um produto específico na loja Fluence Store Kids 
+    Busca o preço, descrição, estoque, tamanhos, categoria, gênero, foto e link do Instagram de um produto específico na loja Fluence Store Kids 
     pelo nome (permite buscas parciais).
     """
     db = SessionLocal()
@@ -43,11 +46,16 @@ def get_product_details(name: str) -> str:
             return f"Não encontrei nenhum produto correspondente a '{name}'."
         
         link = f"\nLink do Instagram: {product.instagram_link}" if product.instagram_link else ""
+        sizes = f"\nTamanhos Disponíveis: {product.sizes}" if product.sizes else ""
+        gender = f"\nPúblico (Gênero): {product.gender}" if product.gender else ""
+        category = f"\nCategoria: {product.category}" if product.category else ""
+        image = f"\nFoto do Produto: {product.image_url}" if product.image_url else ""
         return (
             f"Produto: {product.name}\n"
             f"Preço: R$ {product.price:.2f}\n"
             f"Descrição: {product.description}\n"
-            f"Estoque: {product.stock} unidades disponíveis.{link}"
+            f"Estoque: {product.stock} unidades disponíveis."
+            f"{category}{gender}{sizes}{link}{image}"
         )
     except Exception as e:
         return f"Erro ao acessar o banco de dados para buscar o produto: {str(e)}"

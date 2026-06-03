@@ -13,6 +13,10 @@ class Product(Base):
     price = Column(Numeric(10, 2), nullable=False)
     stock = Column(Integer, default=0)
     instagram_link = Column(String, nullable=True)
+    sizes = Column(String, nullable=True)
+    category = Column(String, nullable=True)
+    gender = Column(String, nullable=True)
+    image_url = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class StoreConfig(Base):

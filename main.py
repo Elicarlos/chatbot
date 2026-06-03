@@ -30,6 +30,10 @@ class ProductSchema(BaseModel):
     price: float
     stock: int = 0
     instagram_link: str | None = None
+    sizes: str | None = None
+    category: str | None = None
+    gender: str | None = None
+    image_url: str | None = None
 
 class StatusSchema(BaseModel):
     status: str
@@ -322,7 +326,11 @@ def get_products(username: str = Depends(authenticate_admin)):
                 "description": p.description,
                 "price": float(p.price),
                 "stock": p.stock,
-                "instagram_link": p.instagram_link
+                "instagram_link": p.instagram_link,
+                "sizes": p.sizes,
+                "category": p.category,
+                "gender": p.gender,
+                "image_url": p.image_url
             }
             for p in products
         ]
@@ -345,7 +353,11 @@ def create_product(product: ProductSchema, username: str = Depends(authenticate_
             description=product.description,
             price=product.price,
             stock=product.stock,
-            instagram_link=product.instagram_link
+            instagram_link=product.instagram_link,
+            sizes=product.sizes,
+            category=product.category,
+            gender=product.gender,
+            image_url=product.image_url
         )
         db.add(new_prod)
         db.commit()
@@ -370,6 +382,10 @@ def update_product(product_id: int, product: ProductSchema, username: str = Depe
         prod.price = product.price
         prod.stock = product.stock
         prod.instagram_link = product.instagram_link
+        prod.sizes = product.sizes
+        prod.category = product.category
+        prod.gender = product.gender
+        prod.image_url = product.image_url
         
         db.commit()
         return {"status": "success"}
