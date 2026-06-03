@@ -28,6 +28,11 @@ services:
       resources:
         limits:
           memory: 256m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     networks:
       - bot_network
 
@@ -50,7 +55,7 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - ./evolution-api/instances:/evolution/instances
     networks:
@@ -82,6 +87,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - bot_network
 
