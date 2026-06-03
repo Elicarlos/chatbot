@@ -1,8 +1,9 @@
 FROM node:20
 
-RUN npm install -g fs-extra evolution-manager
+RUN ln -sf /usr/local/bin/npm /usr/bin/npm && \
+    ln -sf /usr/local/bin/node /usr/bin/node
 
-RUN cd /usr/local/lib/node_modules/evolution-manager && npm install && npm run build
+RUN npm install -g fs-extra evolution-manager
 
 EXPOSE 3000
 
