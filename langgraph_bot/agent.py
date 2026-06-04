@@ -44,8 +44,10 @@ tools = [
 
 # O Google/OpenAI API Key será lido automaticamente do ambiente
 api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("OPENAI_API_KEY")
-model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-llm = ChatGoogleGenerativeAI(model=model_name, temperature=0.3, google_api_key=api_key)
+model_name = os.getenv("GEMINI_MODEL")
+if not model_name or not model_name.strip():
+    model_name = "gemini-1.5-flash"
+llm = ChatGoogleGenerativeAI(model=model_name.strip(), temperature=0.3, google_api_key=api_key)
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", SYSTEM_PROMPT),
