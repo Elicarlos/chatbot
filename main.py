@@ -475,7 +475,7 @@ def configure_webhooks_on_startup():
     for attempt in range(1, max_retries + 1):
         try:
             headers = {"apikey": api_key}
-            resp = requests.get(f"{api_url}/instance", headers=headers, timeout=10)
+            resp = requests.get(f"{api_url}/instance/fetchInstances", headers=headers, timeout=10)
             if resp.status_code == 200:
                 instances = resp.json()
                 logger.info(f"Conexão com a Evolution API estabelecida com sucesso na tentativa {attempt}.")
