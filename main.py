@@ -102,21 +102,14 @@ async def receive_whatsapp_message(
     authorization: str = Header(None),
     webhook_authorization: str = Header(None)
 ):
-    # Log de depuração para os headers do webhook
-    logger.info(f"Webhook recebido. Headers: {dict(request.headers)}")
-    logger.info(f"Header 'authorization': {authorization} | Header 'webhook-authorization': {webhook_authorization}")
-    logger.info(f"WEBHOOK_SECRET configurado: {WEBHOOK_SECRET}")
-
     token = authorization or webhook_authorization
     if not token:
-        logger.warning("Nenhum token de autorizacao encontrado nos headers.")
         raise HTTPException(status_code=401, detail="Unauthorized")
         
     clean_token = token.replace("Bearer ", "").strip()
     clean_secret = WEBHOOK_SECRET.replace("Bearer ", "").strip()
     
     if clean_token != clean_secret:
-        logger.warning(f"Token incorreto. Recebido: {clean_token} | Esperado: {clean_secret}")
         raise HTTPException(status_code=401, detail="Unauthorized")
     
     event_type = payload.get("event")
@@ -454,6 +447,64 @@ def delete_product(product_id: int, username: str = Depends(authenticate_admin))
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+@app.on_event("startup")
+def configure_webhooks_on_startup():
+    import requests
+    import os
+    
+    api_url = os.getenv("EVOLUTION_API_URL", "http://evolution-api:8080")
+    api_key = os.getenv("EVOLUTION_API_KEY")
+    webhook_secret = os.getenv("WEBHOOK_SECRET")
+    
+    webhook_url = os.getenv("WEBHOOK_URL")
+    if not webhook_url:
+        webhook_url = "http://bot-python:8000/webhook/whatsapp"
+        
+    if not api_key:
+        logger.warning("EVOLUTION_API_KEY não configurada. Pulando configuração automática de webhooks.")
+        return
+        
+    logger.info(f"Iniciando configuração automática de webhooks na Evolution API ({api_url}). URL: {webhook_url}")
+    
+    try:
+        headers = {"apikey": api_key}
+        resp = requests.get(f"{api_url}/instance", headers=headers, timeout=10)
+        if resp.status_code == 200:
+            instances = resp.json()
+            if isinstance(instances, list):
+                for inst in instances:
+                    name = inst.get("instanceName")
+                    if name:
+                        set_url = f"{api_url}/webhook/set/{name}"
+                        payload = {
+                            "webhook": {
+                                "enabled": True,
+                                "url": webhook_url,
+                                "webhookByEvents": False,
+                                "webhookBase64": True,
+                                "events": [
+                                    "MESSAGES_UPSERT",
+                                    "MESSAGES_UPDATE",
+                                    "QRCODE_UPDATED",
+                                    "CONNECTION_UPDATE"
+                                ],
+                                "headers": {
+                                    "Authorization": f"Bearer {webhook_secret}"
+                                }
+                            }
+                        }
+                        set_resp = requests.post(set_url, headers=headers, json=payload, timeout=10)
+                        if set_resp.status_code in [200, 201]:
+                            logger.info(f"Webhook configurado com sucesso para a instância: {name}")
+                        else:
+                            logger.error(f"Erro ao configurar webhook para {name}: {set_resp.status_code} - {set_resp.text}")
+            else:
+                logger.warning(f"Formato de resposta inesperado de /instance: {instances}")
+        else:
+            logger.error(f"Erro ao obter instâncias da Evolution API: {resp.status_code} - {resp.text}")
+    except Exception as e:
+        logger.error(f"Falha na execução do configurador automático de webhooks: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
