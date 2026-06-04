@@ -452,6 +452,7 @@ def health_check():
 def configure_webhooks_on_startup():
     import requests
     import os
+    import time
     
     api_url = os.getenv("EVOLUTION_API_URL", "http://evolution-api:8080")
     api_key = os.getenv("EVOLUTION_API_KEY")
@@ -467,44 +468,64 @@ def configure_webhooks_on_startup():
         
     logger.info(f"Iniciando configuração automática de webhooks na Evolution API ({api_url}). URL: {webhook_url}")
     
+    max_retries = 6
+    retry_delay = 5
+    instances = None
+    
+    for attempt in range(1, max_retries + 1):
+        try:
+            headers = {"apikey": api_key}
+            resp = requests.get(f"{api_url}/instance", headers=headers, timeout=10)
+            if resp.status_code == 200:
+                instances = resp.json()
+                logger.info(f"Conexão com a Evolution API estabelecida com sucesso na tentativa {attempt}.")
+                break
+            else:
+                logger.warning(f"Tentativa {attempt}/{max_retries}: Evolution API retornou status {resp.status_code} ao buscar instâncias.")
+        except Exception as e:
+            logger.warning(f"Tentativa {attempt}/{max_retries} falhou ao conectar na Evolution API: {str(e)}")
+            
+        if attempt < max_retries:
+            logger.info(f"Aguardando {retry_delay} segundos antes de tentar novamente...")
+            time.sleep(retry_delay)
+            
+    if instances is None:
+        logger.error("Não foi possível conectar à Evolution API após todas as tentativas. Auto-configuração cancelada.")
+        return
+        
     try:
         headers = {"apikey": api_key}
-        resp = requests.get(f"{api_url}/instance", headers=headers, timeout=10)
-        if resp.status_code == 200:
-            instances = resp.json()
-            if isinstance(instances, list):
-                for inst in instances:
-                    name = inst.get("instanceName")
-                    if name:
-                        set_url = f"{api_url}/webhook/set/{name}"
-                        payload = {
-                            "webhook": {
-                                "enabled": True,
-                                "url": webhook_url,
-                                "webhookByEvents": False,
-                                "webhookBase64": True,
-                                "events": [
-                                    "MESSAGES_UPSERT",
-                                    "MESSAGES_UPDATE",
-                                    "QRCODE_UPDATED",
-                                    "CONNECTION_UPDATE"
-                                ],
-                                "headers": {
-                                    "Authorization": f"Bearer {webhook_secret}"
-                                }
+        if isinstance(instances, list):
+            for inst in instances:
+                name = inst.get("instanceName")
+                if name:
+                    set_url = f"{api_url}/webhook/set/{name}"
+                    payload = {
+                        "webhook": {
+                            "enabled": True,
+                            "url": webhook_url,
+                            "webhookByEvents": False,
+                            "webhookBase64": True,
+                            "events": [
+                                "MESSAGES_UPSERT",
+                                "MESSAGES_UPDATE",
+                                "QRCODE_UPDATED",
+                                "CONNECTION_UPDATE"
+                            ],
+                            "headers": {
+                                "Authorization": f"Bearer {webhook_secret}"
                             }
                         }
-                        set_resp = requests.post(set_url, headers=headers, json=payload, timeout=10)
-                        if set_resp.status_code in [200, 201]:
-                            logger.info(f"Webhook configurado com sucesso para a instância: {name}")
-                        else:
-                            logger.error(f"Erro ao configurar webhook para {name}: {set_resp.status_code} - {set_resp.text}")
-            else:
-                logger.warning(f"Formato de resposta inesperado de /instance: {instances}")
+                    }
+                    set_resp = requests.post(set_url, headers=headers, json=payload, timeout=10)
+                    if set_resp.status_code in [200, 201]:
+                        logger.info(f"Webhook configurado com sucesso para a instância: {name}")
+                    else:
+                        logger.error(f"Erro ao configurar webhook para {name}: {set_resp.status_code} - {set_resp.text}")
         else:
-            logger.error(f"Erro ao obter instâncias da Evolution API: {resp.status_code} - {resp.text}")
+            logger.warning(f"Formato de resposta inesperado de /instance: {instances}")
     except Exception as e:
-        logger.error(f"Falha na execução do configurador automático de webhooks: {str(e)}")
+        logger.error(f"Falha ao salvar as configurações de webhook nas instâncias: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
