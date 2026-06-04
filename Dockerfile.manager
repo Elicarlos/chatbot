@@ -2,3 +2,11 @@ FROM evoapicloud/evolution-manager:latest
 
 # Corrige o bug do Nginx removendo "must-revalidate" da diretiva gzip_proxied
 RUN sed -i 's/must-revalidate //g' /etc/nginx/conf.d/nginx.conf
+
+COPY favicon.ico /usr/share/nginx/html/favicon.ico
+COPY favicon-96x96.png /usr/share/nginx/html/favicon-96x96.png
+COPY apple-touch-icon.png /usr/share/nginx/html/apple-touch-icon.png
+COPY web-app-manifest-192x192.png /usr/share/nginx/html/web-app-manifest-192x192.png
+COPY web-app-manifest-512x512.png /usr/share/nginx/html/web-app-manifest-512x512.png
+COPY site.webmanifest /usr/share/nginx/html/site.webmanifest
+

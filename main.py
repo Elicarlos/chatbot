@@ -7,7 +7,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
 
 from models import Customer, InteractionLog, Product
@@ -219,6 +219,30 @@ def get_admin_dashboard(username: str = Depends(authenticate_admin)):
         return HTMLResponse(content=html_content)
     except Exception as e:
         return HTMLResponse(content=f"<h3>Erro ao carregar o painel administrativo: {str(e)}</h3>", status_code=500)
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return FileResponse("favicon.ico")
+
+@app.get("/favicon-96x96.png", include_in_schema=False)
+def favicon_96():
+    return FileResponse("favicon-96x96.png")
+
+@app.get("/apple-touch-icon.png", include_in_schema=False)
+def apple_touch_icon():
+    return FileResponse("apple-touch-icon.png")
+
+@app.get("/web-app-manifest-192x192.png", include_in_schema=False)
+def manifest_192():
+    return FileResponse("web-app-manifest-192x192.png")
+
+@app.get("/web-app-manifest-512x512.png", include_in_schema=False)
+def manifest_512():
+    return FileResponse("web-app-manifest-512x512.png")
+
+@app.get("/site.webmanifest", include_in_schema=False)
+def webmanifest():
+    return FileResponse("site.webmanifest")
 
 @app.get("/api/admin/metrics")
 def get_metrics(username: str = Depends(authenticate_admin)):
