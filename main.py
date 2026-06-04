@@ -2,103 +2,78 @@ import os
 import logging
 import requests
 import secrets
-from fastapi import FastAPI, Header, HTTPException, Depends, status, Request
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from dotenv import load_dotenv
-from sqlalchemy import create_engine, func
-from sqlalchemy.orm import sessionmaker
-from fastapi.responses import HTMLResponse, FileResponse
-from pydantic import BaseModel
+from fastapi import FastAPI, Header, HTTPException, Depends, status, Request, BackgroundTasks
 
-from models import Customer, InteractionLog, Product
-from langgraph_bot.agent import process_message_with_ai
-
-load_dotenv()
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-logger = logging.getLogger(__name__)
-
-app = FastAPI(title="Chatbot Webhook API")
-
-# Protege o webhook contra ataques externos
-WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
-
-# Pydantic schemas para o painel de administracao
-class ProductSchema(BaseModel):
-    name: str
-    description: str | None = None
-    price: float
-    stock: int = 0
-    instagram_link: str | None = None
-    sizes: str | None = None
-    category: str | None = None
-    gender: str | None = None
-    image_url: str | None = None
-
-class StatusSchema(BaseModel):
-    status: str
-
-
-# Configuração de conexão do banco de dados para salvar interações
-DATABASE_URL = os.getenv("DATABASE_URL")
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-def extract_message_text(data: dict) -> str:
+def process_incoming_message_task(instance: str, sender: str, data: dict, text: str):
     """
-    Extrai o conteúdo textual de mensagens de forma flexível a partir do
-    payload enviado pela Evolution API.
+    Processa a mensagem em background para liberar o webhook imediatamente
+    e evitar Timeout/Retries na Evolution API.
     """
-    message = data.get("message", {})
-    if not message:
-        return ""
-    
-    # Mensagem de texto simples
-    if "conversation" in message:
-        return message["conversation"]
-    
-    # Mensagem de texto estendida
-    if "extendedTextMessage" in message:
-        return message["extendedTextMessage"].get("text", "")
-        
-    # Imagem com legenda
-    if "imageMessage" in message:
-        return message["imageMessage"].get("caption", "")
-        
-    # Vídeo com legenda
-    if "videoMessage" in message:
-        return message["videoMessage"].get("caption", "")
-        
-    return ""
-
-def send_whatsapp_message(instance: str, to_number: str, text: str):
-    """
-    Envia uma mensagem de texto de volta utilizando a Evolution API.
-    """
-    api_url = os.getenv("EVOLUTION_API_URL", "http://evolution-api:8080")
-    api_key = os.getenv("EVOLUTION_API_KEY")
-    
-    url = f"{api_url}/message/sendText/{instance}"
-    headers = {
-        "Content-Type": "application/json",
-        "apikey": api_key
-    }
-    payload = {
-        "number": to_number,
-        "text": text
-    }
-    
+    logger.info(f"Processando mensagem de {sender} na instância {instance} (Background Task)")
+    db = SessionLocal()
     try:
-        response = requests.post(url, json=payload, headers=headers, timeout=10)
-        response.raise_for_status()
-        logger.info(f"Mensagem enviada com sucesso para {to_number} na instância {instance}")
-    except Exception as e:
-        logger.error(f"Erro ao enviar resposta via Evolution API: {str(e)}")
+        # 1. Verifica ou cadastra o cliente
+        customer = db.query(Customer).filter(Customer.phone_number == sender).first()
+        if not customer:
+            push_name = data.get("pushName")
+            customer = Customer(phone_number=sender, name=push_name, status="ativo")
+            db.add(customer)
+            db.commit()
+            db.refresh(customer)
+            
+        # 2. Verifica se o atendimento está em modo suporte humano (transbordo)
+        is_transbordo = customer.status == "transbordo"
+        if is_transbordo:
+            # Permite que o cliente volte ao atendimento do bot usando a palavra-chave #voltar
+            if text.strip().lower() == "#voltar":
+                customer.status = "ativo"
+                db.commit()
+                logger.info(f"Cliente {sender} reativou o atendimento do chatbot.")
+                is_transbordo = False
+            else:
+                logger.info(f"Mensagem de {sender} ignorada: chatbot pausado (suporte humano ativo).")
+                db.close()
+                return
+        
+        # Fecha a conexão do banco antes de chamar a API da IA para evitar esgotamento de pool
+        db.close()
+        
+        # 3. Envia o indicador de "digitando..." enquanto processa
+        send_typing_presence(instance, sender, duration_seconds=10)
+        
+        # 4. Processa a mensagem usando o agente inteligente
+        response_text = process_message_with_ai(sender, text)
+        
+        # 5. Registra o histórico da mensagem abrindo uma nova conexão rápida
+        db = SessionLocal()
+        interaction = InteractionLog(
+            phone_number=sender,
+            message_in=text,
+            message_out=response_text
+        )
+        db.add(interaction)
+        db.commit()
+        
+        # 6. Envia a resposta de volta ao WhatsApp
+        send_whatsapp_message(instance, sender, response_text)
+        
+    except Exception as err:
+        logger.error(f"Erro no processamento do fluxo em background: {str(err)}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
 
 @app.post("/webhook/whatsapp")
 async def receive_whatsapp_message(
     payload: dict,
     request: Request,
+    background_tasks: BackgroundTasks,
     authorization: str = Header(None),
     webhook_authorization: str = Header(None)
 ):
@@ -132,65 +107,11 @@ async def receive_whatsapp_message(
         if not text:
             return {"status": "no_text_to_process"}
             
-        logger.info(f"Mensagem recebida de {sender} na instância {instance}: {text}")
+        # Padrão Ouro: Delega o processamento pesado (LLM) para uma BackgroundTask
+        # Isso libera a Evolution API imediatamente (retornando HTTP 200 OK) e evita falhas 504 e loops de retry infinitos.
+        background_tasks.add_task(process_incoming_message_task, instance, sender, data, text)
         
-        db = SessionLocal()
-        try:
-            # 1. Verifica ou cadastra o cliente
-            customer = db.query(Customer).filter(Customer.phone_number == sender).first()
-            if not customer:
-                push_name = data.get("pushName")
-                customer = Customer(phone_number=sender, name=push_name, status="ativo")
-                db.add(customer)
-                db.commit()
-                db.refresh(customer)
-                
-            # 2. Verifica se o atendimento está em modo suporte humano (transbordo)
-            is_transbordo = customer.status == "transbordo"
-            if is_transbordo:
-                # Permite que o cliente volte ao atendimento do bot usando a palavra-chave #voltar
-                if text.strip().lower() == "#voltar":
-                    customer.status = "ativo"
-                    db.commit()
-                    logger.info(f"Cliente {sender} reativou o atendimento do chatbot.")
-                    is_transbordo = False
-                else:
-                    logger.info(f"Mensagem de {sender} ignorada: chatbot pausado (suporte humano ativo).")
-                    db.close()
-                    return {"status": "transbordo_active_ignored"}
-            
-            # Fecha a conexão do banco antes de chamar a API da OpenAI para evitar esgotamento de pool e Gateway Timeout
-            db.close()
-            
-            # 3. Processa a mensagem usando o agente inteligente e cordial
-            response_text = process_message_with_ai(sender, text)
-            
-            # 4. Registra o histórico da mensagem abrindo uma nova conexão rápida
-            db = SessionLocal()
-            interaction = InteractionLog(
-                phone_number=sender,
-                message_in=text,
-                message_out=response_text
-            )
-            db.add(interaction)
-            db.commit()
-            
-            # 5. Envia a resposta de volta ao WhatsApp
-            send_whatsapp_message(instance, sender, response_text)
-            
-        except Exception as err:
-            logger.error(f"Erro no processamento do fluxo de atendimento: {str(err)}")
-            try:
-                db.rollback()
-            except Exception:
-                pass
-        finally:
-            try:
-                db.close()
-            except Exception:
-                pass
-        
-    return {"status": "processed"}
+    return {"status": "received"}
 
 # ----------------- SEGURANÇA E AUTENTICAÇÃO DO PAINEL -----------------
 
