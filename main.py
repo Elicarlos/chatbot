@@ -145,6 +145,9 @@ def process_incoming_message_task(instance: str, sender: str, data: dict, text: 
                 db.close()
                 return
         
+        # Pega o nome do cliente antes de fechar a conexao
+        customer_name = customer.name if customer else data.get("pushName")
+        
         # Fecha a conexão do banco antes de chamar a API da IA para evitar esgotamento de pool
         db.close()
         
@@ -152,7 +155,7 @@ def process_incoming_message_task(instance: str, sender: str, data: dict, text: 
         send_typing_presence(instance, sender, duration_seconds=10)
         
         # 4. Processa a mensagem usando o agente inteligente
-        response_text = process_message_with_ai(sender, text)
+        response_text = process_message_with_ai(sender, text, customer_name=customer_name)
         
         # 5. Registra o histórico da mensagem abrindo uma nova conexão rápida
         db = SessionLocal()

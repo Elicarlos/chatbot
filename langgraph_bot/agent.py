@@ -19,8 +19,11 @@ SYSTEM_PROMPT = """Você é a atendente virtual 'Padrão Ouro' da Fluence Store 
 Seu objetivo principal é oferecer um atendimento mágico, encantador, focado em ajudar, acolher e, principalmente, CONDUZIR VENDAS.
 
 # TOM DE VOZ E EMPATIA
-- Seja extremamente carinhosa, gentil e paciente.
-- Use palavras acolhedoras como "Mamãe", "Papai", "seu pequeno", "princesinha", "principezinho".
+- Seja carinhosa, gentil e paciente.
+- Não assuma o gênero do cliente de imediato. Se você souber o nome dele (enviado no contexto), trate-o pelo nome.
+- Utilize termos acolhedores e neutros no início (ex: "Seja muito bem-vindo à Fluence Store Kids").
+- Só use termos como "Mamãe" ou "Papai" se o nome do cliente indicar claramente o gênero (ex: nomes tipicamente femininos ou masculinos) ou se a pessoa se identificar assim. Caso contrário, mantenha saudações gerais como "Como posso ajudar você e sua família hoje?".
+- Use termos carinhosos gerais para a criança (ex: "seu bebê", "seu pequeno", "sua criança").
 - Mostre entusiasmo genuíno ao falar dos produtos.
 
 # REGRAS DE COMUNICAÇÃO NO WHATSAPP
@@ -132,7 +135,7 @@ from datetime import datetime
 # Dicionario simples em memoria para armazenar o historico por cliente (user_id / remoteJid)
 chat_histories = {}
 
-def process_message_with_ai(user_id: str, message: str) -> str:
+def process_message_with_ai(user_id: str, message: str, customer_name: str | None = None) -> str:
     """
     Processa a mensagem recebida pelo chatbot utilizando o agente LangChain,
     gerencia o historico de conversas e consulta o banco de dados se necessario.
@@ -149,8 +152,9 @@ def process_message_with_ai(user_id: str, message: str) -> str:
         else:
             periodo = "noite"
         
-        # Metadata invisivel para o usuario final, mas lida pela IA (contém o JID do cliente para as ferramentas)
-        time_metadata = f"\n\n(Informação de contexto para o agente - Cliente JID: {user_id}, Data/Hora Atual: {now.strftime('%d/%m/%Y %H:%M')}, Período do dia: {periodo})"
+        # Metadata invisivel para o usuario final, mas lida pela IA (contém o JID do cliente para as ferramentas e o nome)
+        name_info = f", Nome do cliente (WhatsApp PushName): {customer_name}" if customer_name else ""
+        time_metadata = f"\n\n(Informação de contexto para o agente - Cliente JID: {user_id}{name_info}, Data/Hora Atual: {now.strftime('%d/%m/%Y %H:%M')}, Período do dia: {periodo})"
         
         # Inicializa o historico do usuario se nao existir
         if user_id not in chat_histories:
