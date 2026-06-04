@@ -3,7 +3,117 @@ import logging
 import requests
 import secrets
 from fastapi import FastAPI, Header, HTTPException, Depends, status, Request, BackgroundTasks
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from dotenv import load_dotenv
+from sqlalchemy import create_engine, func
+from sqlalchemy.orm import sessionmaker
+from fastapi.responses import HTMLResponse, FileResponse
+from pydantic import BaseModel
 
+from models import Customer, InteractionLog, Product
+from langgraph_bot.agent import process_message_with_ai
+
+load_dotenv()
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="Chatbot Webhook API")
+
+# Protege o webhook contra ataques externos
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
+
+# Pydantic schemas para o painel de administracao
+class ProductSchema(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    stock: int = 0
+    instagram_link: str | None = None
+    sizes: str | None = None
+    category: str | None = None
+    gender: str | None = None
+    image_url: str | None = None
+
+class StatusSchema(BaseModel):
+    status: str
+
+
+# Configuração de conexão do banco de dados para salvar interações
+DATABASE_URL = os.getenv("DATABASE_URL")
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def extract_message_text(data: dict) -> str:
+    """
+    Extrai o conteúdo textual de mensagens de forma flexível a partir do
+    payload enviado pela Evolution API.
+    """
+    message = data.get("message", {})
+    if not message:
+        return ""
+    
+    # Mensagem de texto simples
+    if "conversation" in message:
+        return message["conversation"]
+    
+    # Mensagem de texto estendida
+    if "extendedTextMessage" in message:
+        return message["extendedTextMessage"].get("text", "")
+        
+    # Imagem com legenda
+    if "imageMessage" in message:
+        return message["imageMessage"].get("caption", "")
+        
+    # Vídeo com legenda
+    if "videoMessage" in message:
+        return message["videoMessage"].get("caption", "")
+        
+    return ""
+
+def send_whatsapp_message(instance: str, to_number: str, text: str):
+    """
+    Envia uma mensagem de texto de volta utilizando a Evolution API.
+    """
+    api_url = os.getenv("EVOLUTION_API_URL", "http://evolution-api:8080")
+    api_key = os.getenv("EVOLUTION_API_KEY")
+    
+    url = f"{api_url}/message/sendText/{instance}"
+    headers = {
+        "Content-Type": "application/json",
+        "apikey": api_key
+    }
+    payload = {
+        "number": to_number,
+        "text": text
+    }
+    
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        response.raise_for_status()
+        logger.info(f"Mensagem enviada com sucesso para {to_number} na instância {instance}")
+    except Exception as e:
+        logger.error(f"Erro ao enviar resposta via Evolution API: {str(e)}")
+
+def send_typing_presence(instance: str, to_number: str, duration_seconds: int = 8):
+    """
+    Envia o indicador de 'digitando...' no WhatsApp antes de responder.
+    """
+    api_url = os.getenv("EVOLUTION_API_URL", "http://evolution-api:8080")
+    api_key = os.getenv("EVOLUTION_API_KEY")
+    url = f"{api_url}/chat/sendPresence/{instance}"
+    headers = {"Content-Type": "application/json", "apikey": api_key}
+    payload = {
+        "number": to_number,
+        "options": {
+            "presence": "composing",
+            "delay": duration_seconds * 1000
+        }
+    }
+    try:
+        requests.post(url, json=payload, headers=headers, timeout=5)
+    except Exception:
+        pass
 def process_incoming_message_task(instance: str, sender: str, data: dict, text: str):
     """
     Processa a mensagem em background para liberar o webhook imediatamente
