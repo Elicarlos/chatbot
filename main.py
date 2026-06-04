@@ -2,7 +2,7 @@ import os
 import logging
 import requests
 import secrets
-from fastapi import FastAPI, Header, HTTPException, Depends, status
+from fastapi import FastAPI, Header, HTTPException, Depends, status, Request
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, func
@@ -98,10 +98,25 @@ def send_whatsapp_message(instance: str, to_number: str, text: str):
 @app.post("/webhook/whatsapp")
 async def receive_whatsapp_message(
     payload: dict,
-    authorization: str = Header(None)
+    request: Request,
+    authorization: str = Header(None),
+    webhook_authorization: str = Header(None)
 ):
-    # Verificação de segurança do webhook (Impede acesso não autorizado)
-    if authorization != f"Bearer {WEBHOOK_SECRET}":
+    # Log de depuração para os headers do webhook
+    logger.info(f"Webhook recebido. Headers: {dict(request.headers)}")
+    logger.info(f"Header 'authorization': {authorization} | Header 'webhook-authorization': {webhook_authorization}")
+    logger.info(f"WEBHOOK_SECRET configurado: {WEBHOOK_SECRET}")
+
+    token = authorization or webhook_authorization
+    if not token:
+        logger.warning("Nenhum token de autorizacao encontrado nos headers.")
+        raise HTTPException(status_code=401, detail="Unauthorized")
+        
+    clean_token = token.replace("Bearer ", "").strip()
+    clean_secret = WEBHOOK_SECRET.replace("Bearer ", "").strip()
+    
+    if clean_token != clean_secret:
+        logger.warning(f"Token incorreto. Recebido: {clean_token} | Esperado: {clean_secret}")
         raise HTTPException(status_code=401, detail="Unauthorized")
     
     event_type = payload.get("event")
