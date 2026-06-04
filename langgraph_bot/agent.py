@@ -42,12 +42,67 @@ tools = [
     registrar_avaliacao_csat
 ]
 
-# O Google/OpenAI API Key será lido automaticamente do ambiente
-api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("OPENAI_API_KEY")
-model_name = os.getenv("GEMINI_MODEL")
-if not model_name or not model_name.strip():
-    model_name = "gemini-1.5-flash-latest"
-llm = ChatGoogleGenerativeAI(model=model_name.strip(), temperature=0.3, google_api_key=api_key)
+# Suporte dinâmico a múltiplos provedores de IA (Groq, Hugging Face, OpenAI, Gemini)
+groq_api_key = os.getenv("GROQ_API_KEY")
+google_api_key = os.getenv("GOOGLE_API_KEY")
+hf_api_key = os.getenv("HF_API_KEY")
+openai_api_key = os.getenv("OPENAI_API_KEY")
+
+provider = os.getenv("IA_PROVIDER", "").lower()
+
+# Autodetecta o provedor com base nas chaves fornecidas
+if not provider:
+    if groq_api_key:
+        provider = "groq"
+    elif hf_api_key:
+        provider = "huggingface"
+    elif google_api_key and google_api_key.startswith("AIzaSy"):
+        provider = "gemini"
+    elif openai_api_key and openai_api_key.startswith("sk-"):
+        provider = "openai"
+    else:
+        # Se a chave do Gemini foi colocada em OPENAI_API_KEY
+        if openai_api_key and openai_api_key.startswith("AIzaSy"):
+            provider = "gemini"
+            google_api_key = openai_api_key
+        else:
+            provider = "gemini"
+
+if provider == "groq":
+    from langchain_openai import ChatOpenAI
+    model_name = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    llm = ChatOpenAI(
+        model=model_name,
+        temperature=0.3,
+        api_key=groq_api_key or openai_api_key,
+        base_url="https://api.groq.com/openai/v1"
+    )
+elif provider == "huggingface":
+    from langchain_openai import ChatOpenAI
+    model_name = os.getenv("HF_MODEL", "Qwen/Qwen2.5-7B-Instruct")
+    llm = ChatOpenAI(
+        model=model_name,
+        temperature=0.3,
+        api_key=hf_api_key or openai_api_key,
+        base_url="https://api-inference.huggingface.co/v1"
+    )
+elif provider == "openai":
+    from langchain_openai import ChatOpenAI
+    model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    llm = ChatOpenAI(
+        model=model_name,
+        temperature=0.3,
+        api_key=openai_api_key
+    )
+else:  # gemini
+    model_name = os.getenv("GEMINI_MODEL")
+    if not model_name or not model_name.strip():
+        model_name = "gemini-1.5-flash-latest"
+    llm = ChatGoogleGenerativeAI(
+        model=model_name.strip(),
+        temperature=0.3,
+        google_api_key=google_api_key or openai_api_key
+    )
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", SYSTEM_PROMPT),
