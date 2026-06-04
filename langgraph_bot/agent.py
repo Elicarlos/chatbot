@@ -1,8 +1,8 @@
 import os
 import logging
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.agents import create_openai_tools_agent, AgentExecutor
+from langchain.agents import create_tool_calling_agent, AgentExecutor
 from langgraph_bot.tools import (
     list_products, 
     get_product_details, 
@@ -42,8 +42,9 @@ tools = [
     registrar_avaliacao_csat
 ]
 
-# O OpenAI API Key sera lido automaticamente do ambiente (os.environ["OPENAI_API_KEY"])
-llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.3)
+# O Google/OpenAI API Key será lido automaticamente do ambiente
+api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("OPENAI_API_KEY")
+llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3, google_api_key=api_key)
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", SYSTEM_PROMPT),
@@ -52,7 +53,7 @@ prompt = ChatPromptTemplate.from_messages([
     MessagesPlaceholder(variable_name="agent_scratchpad"),
 ])
 
-agent = create_openai_tools_agent(llm, tools, prompt)
+agent = create_tool_calling_agent(llm, tools, prompt)
 agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
 from datetime import datetime
