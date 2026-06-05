@@ -219,7 +219,7 @@ async def receive_whatsapp_message(
             logger.info("Ignorando mensagem gerada pelo próprio bot (fromMe=True).")
             return {"status": "ignored_self"}
             
-        sender = key.get("remoteJid")
+        sender = key.get("remoteJidAlt") or key.get("remoteJid")
         text = extract_message_text(data)
         
         if not text:
