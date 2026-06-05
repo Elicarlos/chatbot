@@ -9,7 +9,7 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 @tool
-def list_products() -> str:
+def list_products(dummy: str = None) -> str:
     """
     Retorna a lista de todos os produtos cadastrados na loja Fluence Store Kids, 
     com o respectivo nome, preço, descrição, tamanho, categoria, gênero e link do Instagram.
@@ -33,34 +33,72 @@ def list_products() -> str:
     finally:
         db.close()
 
+from sqlalchemy import and_, or_
+
 @tool
 def get_product_details(name: str) -> str:
     """
-    Busca o preço, descrição, estoque, tamanhos, categoria, gênero, foto e link do Instagram de um produto específico na loja Fluence Store Kids 
-    pelo nome (permite buscas parciais).
+    Busca o preço, descrição, estoque, tamanhos, categoria, gênero, foto e link do Instagram de produtos na loja Fluence Store Kids 
+    a partir de um ou mais termos de busca (ex: "vestido 6" ou "conjunto feminino"). A busca analisa nome, descrição, categoria e tamanhos.
     """
     db = SessionLocal()
     try:
-        product = db.query(Product).filter(Product.name.ilike(f"%{name}%")).first()
-        if not product:
+        # Quebra o termo de busca em palavras e remove termos de ruído (stopwords)
+        stopwords = {
+            'de', 'para', 'com', 'em', 'um', 'uma', 'os', 'as', 'o', 'a', 
+            'do', 'da', 'dos', 'das', 'no', 'na', 'nos', 'nas', 'tamanho', 
+            'tamanhos', 'ano', 'anos', 'mes', 'meses', 'idade', 'idades', 
+            'peças', 'pecas', 'infantil', 'bebe', 'bebê', 'criança', 'crianca',
+            'loja', 'disponivel', 'disponíveis', 'tem', 'temos', 'voce', 'você'
+        }
+        raw_words = [w.strip().lower() for w in name.split() if w.strip()]
+        words = [w for w in raw_words if w not in stopwords]
+        
+        # Se após a limpeza não sobrar nada (ex: buscaram apenas por "anos"), usamos a busca original
+        if not words:
+            words = raw_words
+            
+        if not words:
             return f"Não encontrei nenhum produto correspondente a '{name}'."
         
-        link = f"\nLink do Instagram: {product.instagram_link}" if product.instagram_link else ""
-        sizes = f"\nTamanhos Disponíveis: {product.sizes}" if product.sizes else ""
-        gender = f"\nPúblico (Gênero): {product.gender}" if product.gender else ""
-        category = f"\nCategoria: {product.category}" if product.category else ""
-        image = f"\nFoto do Produto: {product.image_url}" if product.image_url else ""
-        return (
-            f"Produto: {product.name}\n"
-            f"Preço: R$ {product.price:.2f}\n"
-            f"Descrição: {product.description}\n"
-            f"Estoque: {product.stock} unidades disponíveis."
-            f"{category}{gender}{sizes}{link}{image}"
-        )
+        # Constrói os filtros: cada palavra buscada deve estar presente em pelo menos um dos campos do produto
+        conditions = []
+        for word in words:
+            conditions.append(
+                or_(
+                    Product.name.ilike(f"%{word}%"),
+                    Product.description.ilike(f"%{word}%"),
+                    Product.category.ilike(f"%{word}%"),
+                    Product.sizes.ilike(f"%{word}%")
+                )
+            )
+        
+        # Executa a busca exigindo que todas as palavras-chave sejam satisfeitas
+        products = db.query(Product).filter(and_(*conditions)).all()
+        
+        if not products:
+            return f"Não encontrei nenhum produto correspondente a '{name}'."
+        
+        ret = "Encontrei o(s) seguinte(s) produto(s):\n"
+        for product in products:
+            link = f"\nLink do Instagram: {product.instagram_link}" if product.instagram_link else ""
+            sizes = f"\nTamanhos Disponíveis: {product.sizes}" if product.sizes else ""
+            gender = f"\nPúblico (Gênero): {product.gender}" if product.gender else ""
+            category = f"\nCategoria: {product.category}" if product.category else ""
+            image = f"\nFoto do Produto: {product.image_url}" if product.image_url else ""
+            ret += (
+                f"\n- Produto: {product.name}\n"
+                f"  Preço: R$ {product.price:.2f}\n"
+                f"  Descrição: {product.description}\n"
+                f"  Estoque: {product.stock} unidades disponíveis."
+                f"{category}{gender}{sizes}{link}{image}\n"
+            )
+        return ret
     except Exception as e:
         return f"Erro ao acessar o banco de dados para buscar o produto: {str(e)}"
     finally:
         db.close()
+
 
 @tool
 def get_store_info(key: str) -> str:
