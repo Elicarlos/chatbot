@@ -105,10 +105,8 @@ def send_typing_presence(instance: str, to_number: str, duration_seconds: int = 
     headers = {"Content-Type": "application/json", "apikey": api_key}
     payload = {
         "number": to_number,
-        "options": {
-            "presence": "composing",
-            "delay": duration_seconds * 1000
-        }
+        "presence": "composing",
+        "delay": duration_seconds * 1000
     }
     try:
         requests.post(url, json=payload, headers=headers, timeout=5)
