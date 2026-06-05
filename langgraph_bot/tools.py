@@ -9,7 +9,7 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 @tool
-def list_products() -> str:
+def list_products(dummy: str = None) -> str:
     """
     Retorna a lista de todos os produtos cadastrados na loja Fluence Store Kids, 
     com o respectivo nome, preço, descrição, tamanho, categoria, gênero e link do Instagram.
