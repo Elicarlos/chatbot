@@ -2,6 +2,7 @@ import os
 import logging
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain.agents import create_tool_calling_agent, AgentExecutor
 from langgraph_bot.tools import (
     list_products, 
@@ -19,7 +20,7 @@ SYSTEM_PROMPT = """Você é a atendente virtual 'Padrão Ouro' da Fluence Store 
 # TOM DE VOZ E EMPATIA
 - Seja carinhosa, gentil e paciente.
 - Não assuma o gênero do cliente de imediato. Se você souber o nome dele (enviado no contexto), trate-o pelo nome.
-- Use termos carinhosos gerais para a criança (ex: "seu bebê", "seu pequeno", "sua criança").
+- Concordância de Gênero da Criança: Adapte as referências à criança de acordo com o produto oferecido. Se o produto for feminino (como vestidos, saias ou conjuntos femininos), use termos no feminino (ex: "sua pequena", "sua menina"). Se o produto for masculino (como bermudas ou camisas masculinas), use termos no masculino (ex: "seu pequeno", "seu menino"). Se o produto for neutro ou unissex, use termos gerais (ex: "seu bebê", "sua criança").
 - Mostre entusiasmo genuíno ao falar dos produtos.
 
 # REGRAS DE COMUNICAÇÃO NO WHATSAPP
@@ -38,6 +39,7 @@ SYSTEM_PROMPT = """Você é a atendente virtual 'Padrão Ouro' da Fluence Store 
 - Entregas: Entregamos em toda Teresina com taxa fixa de R$ 15,00.
 
 # USO DAS FERRAMENTAS
+- Chamadas de Ferramentas: Ao usar uma ferramenta, execute-a estritamente de forma nativa e automática por meio do sistema de chamadas de funções (Function Calling). Nunca escreva texto simulando chamadas de funções e nunca junte argumentos no campo de nome da ferramenta. Se não precisar de ferramentas para responder (ex: se o cliente apenas agradeceu), responda puramente em texto.
 - list_products: Use para obter a lista completa de produtos da loja.
 - get_product_details: Use para buscar detalhes de um produto específico. ATENÇÃO: Nunca inclua tamanhos, idades ou cores no campo 'name' da busca. Se o cliente pedir "vestido 6 anos", busque apenas por "vestido" e, depois de receber a resposta da ferramenta, verifique se ela possui o tamanho 6 nos tamanhos disponíveis.
 - get_store_info: Para chaves 'horario_funcionamento', 'dados_pix', 'endereco', 'formas_pagamento'.
@@ -175,13 +177,13 @@ def process_message_with_ai(user_id: str, message: str, customer_name: str | Non
         name_info = f", Nome do cliente (WhatsApp PushName): {customer_name}" if customer_name else ""
         time_metadata = f"\n\n(Informação de contexto para o agente - Cliente JID: {user_id}{name_info}, Data/Hora Atual: {now.strftime('%d/%m/%Y %H:%M')}, Período do dia: {periodo}, Tempo desde a última interação do cliente: {tempo_decorrido_str})"
         
-        # Formata o historico de forma compativel com o MessagesPlaceholder
+        # Formata o historico de forma compativel com o MessagesPlaceholder usando objetos nativos do LangChain
         history = []
         for role, text in chat_histories[user_id]["messages"][-10:]: # Ultimas 10 interacoes
             if role == "human":
-                history.append(("human", text))
+                history.append(HumanMessage(content=text))
             else:
-                history.append(("ai", text))
+                history.append(AIMessage(content=text))
         
         # Executa o agente passando a mensagem atual acrescida da informacao de tempo
         response = agent_executor.invoke({
