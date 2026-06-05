@@ -16,19 +16,17 @@ logger = logging.getLogger(__name__)
 
 # Prompt de Sistema personalizado para a Fluence Store Kids
 SYSTEM_PROMPT = """Você é a atendente virtual 'Padrão Ouro' da Fluence Store Kids, uma boutique premium de roupas e artigos infantis e para bebês.
-Seu objetivo principal é oferecer um atendimento mágico, encantador, focado em ajudar, acolher e, principalmente, CONDUZIR VENDAS.
-
 # TOM DE VOZ E EMPATIA
 - Seja carinhosa, gentil e paciente.
 - Não assuma o gênero do cliente de imediato. Se você souber o nome dele (enviado no contexto), trate-o pelo nome.
-- Utilize termos acolhedores e neutros no início (ex: "Seja muito bem-vindo à Fluence Store Kids").
-- Só use termos como "Mamãe" ou "Papai" se o nome do cliente indicar claramente o gênero (ex: nomes tipicamente femininos ou masculinos) ou se a pessoa se identificar assim. Caso contrário, mantenha saudações gerais como "Como posso ajudar você e sua família hoje?".
 - Use termos carinhosos gerais para a criança (ex: "seu bebê", "seu pequeno", "sua criança").
 - Mostre entusiasmo genuíno ao falar dos produtos.
 
 # REGRAS DE COMUNICAÇÃO NO WHATSAPP
 - Formatação: Use *negrito* para destacar informações importantes como preços, nomes de produtos ou regras. Use quebras de linha frequentes para criar mensagens curtas e de fácil leitura. Evite blocos grandes de texto.
 - Emojis: Não utilize emojis, carinhas ou emotion icons sob nenhuma circunstância. Suas mensagens devem ser inteiramente em texto limpo.
+- Links de Produtos: Sempre que detalhar um produto que possua o link do Instagram (`Link do Instagram`) ou imagem (`Foto do Produto`) no catálogo, inclua esse link diretamente na resposta para que o cliente possa visualizar a foto (ex: "Você pode ver as fotos do produto neste link do Instagram: [link]").
+- Saudações e Janela de Conversa: Analise a informação do tempo desde a última interação enviada no contexto. Se a última interação ocorreu há poucos minutos (ex: menos de 30 minutos), NÃO repita saudações formais de boas-vindas (como "Seja muito bem-vindo" ou "Como posso ajudar você hoje"). Continue a conversa de forma direta e fluida, respondendo à pergunta imediatamente. Só use boas-vindas formais se for o primeiro contato do cliente ou se tiver passado muito tempo desde a última mensagem.
 - Clareza: Seja direto, mas mantenha a simpatia e a cordialidade. Sempre dê continuidade ao atendimento.
 
 # PROATIVIDADE E VENDAS
@@ -153,17 +151,33 @@ def process_message_with_ai(user_id: str, message: str, customer_name: str | Non
         else:
             periodo = "noite"
         
-        # Metadata invisivel para o usuario final, mas lida pela IA (contém o JID do cliente para as ferramentas e o nome)
-        name_info = f", Nome do cliente (WhatsApp PushName): {customer_name}" if customer_name else ""
-        time_metadata = f"\n\n(Informação de contexto para o agente - Cliente JID: {user_id}{name_info}, Data/Hora Atual: {now.strftime('%d/%m/%Y %H:%M')}, Período do dia: {periodo})"
-        
         # Inicializa o historico do usuario se nao existir
-        if user_id not in chat_histories:
-            chat_histories[user_id] = []
+        if user_id not in chat_histories or not isinstance(chat_histories[user_id], dict):
+            chat_histories[user_id] = {
+                "messages": [],
+                "last_interaction": None
+            }
+        
+        last_interaction = chat_histories[user_id]["last_interaction"]
+        tempo_decorrido_str = "Primeira mensagem do cliente nesta sessão."
+        if last_interaction:
+            diff = now - last_interaction
+            minutos = int(diff.total_seconds() / 60)
+            if minutos < 1:
+                tempo_decorrido_str = "Menos de 1 minuto atrás (continuação imediata da conversa atual)."
+            elif minutos < 60:
+                tempo_decorrido_str = f"Há {minutos} minutos atrás (continuação da conversa recente)."
+            else:
+                horas = minutos // 60
+                tempo_decorrido_str = f"Há {horas} hora(s) atrás (pode ser considerado um novo contato)."
+        
+        # Metadata invisivel para o usuario final, mas lida pela IA (contém o JID do cliente para as ferramentas, o nome e o tempo de conversa)
+        name_info = f", Nome do cliente (WhatsApp PushName): {customer_name}" if customer_name else ""
+        time_metadata = f"\n\n(Informação de contexto para o agente - Cliente JID: {user_id}{name_info}, Data/Hora Atual: {now.strftime('%d/%m/%Y %H:%M')}, Período do dia: {periodo}, Tempo desde a última interação do cliente: {tempo_decorrido_str})"
         
         # Formata o historico de forma compativel com o MessagesPlaceholder
         history = []
-        for role, text in chat_histories[user_id][-10:]: # Ultimas 10 interacoes
+        for role, text in chat_histories[user_id]["messages"][-10:]: # Ultimas 10 interacoes
             if role == "human":
                 history.append(("human", text))
             else:
@@ -177,16 +191,18 @@ def process_message_with_ai(user_id: str, message: str, customer_name: str | Non
         
         output = response.get("output", "Desculpe, tive um pequeno problema ao processar sua mensagem. Poderia repetir, por favor?")
         
-        # Salva a interacao limpa no historico (sem o metadata de tempo)
-        chat_histories[user_id].append(("human", message))
-        chat_histories[user_id].append(("ai", output))
+        # Salva a interacao limpa no historico (sem o metadata de tempo) e atualiza data da interacao
+        chat_histories[user_id]["messages"].append(("human", message))
+        chat_histories[user_id]["messages"].append(("ai", output))
+        chat_histories[user_id]["last_interaction"] = now
         
         # Limita o tamanho maximo do historico para nao estourar o limite de tokens
-        chat_histories[user_id] = chat_histories[user_id][-20:]
+        chat_histories[user_id]["messages"] = chat_histories[user_id]["messages"][-20:]
         
         return output
         
     except Exception as e:
         logger.error(f"Erro ao processar mensagem no agente de IA: {str(e)}")
         return "Olá! Tivemos uma pequena instabilidade no sistema. Poderia tentar enviar sua mensagem novamente, por favor? Agradecemos muito a sua paciência!"
+
 
