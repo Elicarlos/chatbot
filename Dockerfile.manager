@@ -1,4 +1,4 @@
-FROM evoapicloud/evolution-manager:latest
+FROM evoapicloud/evolution-manager:v2.3.7
 
 # Corrige o bug do Nginx removendo "must-revalidate" da diretiva gzip_proxied
 RUN sed -i 's/must-revalidate //g' /etc/nginx/conf.d/nginx.conf
