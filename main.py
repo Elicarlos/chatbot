@@ -190,36 +190,45 @@ async def receive_whatsapp_message(
     authorization: str = Header(None),
     webhook_authorization: str = Header(None)
 ):
+    logger.info(f"Recebido webhook do Whatsapp: Event={payload.get('event')}, Instance={payload.get('instance')}")
     token = authorization or webhook_authorization
     if not token:
+        logger.warning("Webhook rejeitado: Token de autorização ausente nos cabeçalhos.")
         raise HTTPException(status_code=401, detail="Unauthorized")
         
     clean_token = token.replace("Bearer ", "").strip()
     clean_secret = WEBHOOK_SECRET.replace("Bearer ", "").strip()
     
     if clean_token != clean_secret:
+        logger.warning("Webhook rejeitado: Token de autorização inválido.")
         raise HTTPException(status_code=401, detail="Unauthorized")
     
     event_type = payload.get("event")
     instance = payload.get("instance")
     
+    logger.info(f"Webhook autorizado com sucesso. Tipo do evento: {event_type}")
+    
     # Processa mensagens de entrada
     if event_type == "messages.upsert":
         data = payload.get("data", {})
         if not data:
+            logger.info("Nenhum dado encontrado no payload messages.upsert.")
             return {"status": "empty_data"}
             
         key = data.get("key", {})
         # Ignora mensagens geradas pelo próprio bot
         if key.get("fromMe"):
+            logger.info("Ignorando mensagem gerada pelo próprio bot (fromMe=True).")
             return {"status": "ignored_self"}
             
         sender = key.get("remoteJid")
         text = extract_message_text(data)
         
         if not text:
+            logger.info(f"Nenhum texto extraído da mensagem enviada por {sender}.")
             return {"status": "no_text_to_process"}
             
+        logger.info(f"Mensagem recebida de {sender}: '{text}'. Iniciando processamento em background.")
         # Padrão Ouro: Delega o processamento pesado (LLM) para uma BackgroundTask
         # Isso libera a Evolution API imediatamente (retornando HTTP 200 OK) e evita falhas 504 e loops de retry infinitos.
         background_tasks.add_task(process_incoming_message_task, instance, sender, data, text)
