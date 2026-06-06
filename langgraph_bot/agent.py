@@ -129,10 +129,18 @@ prompt = ChatPromptTemplate.from_messages([
 agent = create_tool_calling_agent(llm, tools, prompt)
 agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=False)
 
+import time
 from datetime import datetime
 
 # Dicionario simples em memoria para armazenar o historico por cliente (user_id / remoteJid)
 chat_histories = {}
+
+def _invocar_agente(input_text: str, history: list) -> str:
+    response = agent_executor.invoke({
+        "input": input_text,
+        "chat_history": history
+    })
+    return response.get("output", "Desculpe, tive um pequeno problema. Poderia repetir, por favor?")
 
 def process_message_with_ai(user_id: str, message: str, customer_name: str | None = None) -> str:
     """
@@ -171,25 +179,41 @@ def process_message_with_ai(user_id: str, message: str, customer_name: str | Non
                 horas = minutos // 60
                 tempo_decorrido_str = f"Há {horas} hora(s) atrás (pode ser considerado um novo contato)."
         
-        # Metadata invisivel para o usuario final, mas lida pela IA (contém o JID do cliente para as ferramentas, o nome e o tempo de conversa)
+        # Metadata invisivel para o usuario final, mas lida pela IA
         name_info = f", Nome do cliente (WhatsApp PushName): {customer_name}" if customer_name else ""
         time_metadata = f"\n\n(Informação de contexto para o agente - Cliente JID: {user_id}{name_info}, Data/Hora Atual: {now.strftime('%d/%m/%Y %H:%M')}, Período do dia: {periodo}, Tempo desde a última interação do cliente: {tempo_decorrido_str})"
         
         # Formata o historico de forma compativel com o MessagesPlaceholder usando objetos nativos do LangChain
         history = []
-        for role, text in chat_histories[user_id]["messages"][-10:]: # Ultimas 10 interacoes
+        for role, text in chat_histories[user_id]["messages"][-10:]:
             if role == "human":
                 history.append(HumanMessage(content=text))
             else:
                 history.append(AIMessage(content=text))
         
-        # Executa o agente passando a mensagem atual acrescida da informacao de tempo
-        response = agent_executor.invoke({
-            "input": f"{message}{time_metadata}",
-            "chat_history": history
-        })
-        
-        output = response.get("output", "Desculpe, tive um pequeno problema ao processar sua mensagem. Poderia repetir, por favor?")
+        # Normaliza mensagens curtas ou ambíguas antes de enviar ao modelo
+        mensagem_normalizada = message.strip()
+        if len(mensagem_normalizada) <= 2 or mensagem_normalizada in ("?", "??", "...", "oi", "Oi"):
+            mensagem_normalizada = f"{mensagem_normalizada} (o cliente enviou uma mensagem muito curta ou ambígua; responda pedindo gentilmente que ele detalhe melhor o que deseja)"
+
+        input_text = f"{mensagem_normalizada}{time_metadata}"
+
+        # Executa o agente com retry automatico (até 2 tentativas)
+        output = None
+        ultima_excecao = None
+        for tentativa in range(1, 3):
+            try:
+                output = _invocar_agente(input_text, history)
+                break
+            except Exception as e:
+                ultima_excecao = e
+                logger.warning(f"Tentativa {tentativa} falhou para o agente de IA: {str(e)}")
+                if tentativa < 2:
+                    time.sleep(1)
+
+        if output is None:
+            logger.error(f"Erro ao processar mensagem no agente de IA após 2 tentativas: {str(ultima_excecao)}")
+            return "Desculpe, tive um pequeno problema ao processar sua mensagem. Poderia repetir, por favor?"
         
         # Salva a interacao limpa no historico (sem o metadata de tempo) e atualiza data da interacao
         chat_histories[user_id]["messages"].append(("human", message))
@@ -202,7 +226,5 @@ def process_message_with_ai(user_id: str, message: str, customer_name: str | Non
         return output
         
     except Exception as e:
-        logger.error(f"Erro ao processar mensagem no agente de IA: {str(e)}")
-        return "Olá! Tivemos uma pequena instabilidade no sistema. Poderia tentar enviar sua mensagem novamente, por favor? Agradecemos muito a sua paciência!"
-
-
+        logger.error(f"Erro inesperado no processamento da mensagem: {str(e)}")
+        return "Desculpe, tive um pequeno problema ao processar sua mensagem. Poderia repetir, por favor?"
