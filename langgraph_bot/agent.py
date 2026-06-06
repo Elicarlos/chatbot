@@ -39,7 +39,6 @@ SYSTEM_PROMPT = """Você é a atendente virtual 'Padrão Ouro' da Fluence Store 
 - Entregas: Entregamos em toda Teresina com taxa fixa de R$ 15,00.
 
 # USO DAS FERRAMENTAS
-- Chamadas de Ferramentas: Ao usar uma ferramenta, execute-a estritamente de forma nativa e automática por meio do sistema de chamadas de funções (Function Calling). Nunca escreva texto simulando chamadas de funções e nunca junte argumentos no campo de nome da ferramenta. Se não precisar de ferramentas para responder (ex: se o cliente apenas agradeceu), responda puramente em texto.
 - list_products: Use para obter a lista completa de produtos da loja. Não passe nenhum argumento.
 - get_product_details: Use para buscar detalhes de um produto específico. ATENÇÃO: Nunca inclua tamanhos, idades ou cores no campo 'name' da busca. Se o cliente pedir "vestido 6 anos", busque apenas por "vestido" e, depois de receber a resposta da ferramenta, verifique se ela possui o tamanho 6 nos tamanhos disponíveis.
 - get_store_info: Para chaves 'horario_funcionamento', 'dados_pix', 'endereco', 'formas_pagamento'.
@@ -86,13 +85,12 @@ if not provider:
             provider = "gemini"
 
 if provider == "groq":
-    from langchain_openai import ChatOpenAI
+    from langchain_groq import ChatGroq
     model_name = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-    llm = ChatOpenAI(
+    llm = ChatGroq(
         model=model_name,
         temperature=0.3,
-        api_key=groq_api_key or openai_api_key,
-        base_url="https://api.groq.com/openai/v1"
+        api_key=groq_api_key
     )
 elif provider == "huggingface":
     from langchain_openai import ChatOpenAI
