@@ -491,6 +491,19 @@ def health_check():
 
 
 
+@app.get("/test-ai")
+def test_ai():
+    try:
+        from langgraph_bot.agent import agent_executor
+        res = agent_executor.invoke({
+            "input": "oi\n\n(Informação de contexto para o agente - Cliente JID: test_jid, Nome: Teste)",
+            "chat_history": []
+        })
+        return {"status": "success", "result": res}
+    except Exception as e:
+        import traceback
+        return {"status": "error", "traceback": traceback.format_exc()}
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
